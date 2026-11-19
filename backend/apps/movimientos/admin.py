@@ -23,15 +23,24 @@ class DetallePrestamoInline(admin.TabularInline):
 class PrestamoAdmin(admin.ModelAdmin):
     list_display = (
         "id",
+        "cliente",
+        "consecutivo",
         "nombre_receptor",
         "documento_receptor",
         "fecha_prestamo",
         "fecha_devolucion_prevista",
         "creado_por",
     )
-    search_fields = ("nombre_receptor", "documento_receptor")
+    search_fields = (
+        "cliente",
+        "consecutivo",
+        "nombre_receptor",
+        "documento_receptor",
+    )
     list_filter = ("fecha_prestamo", "fecha_devolucion_prevista")
     readonly_fields = (
+        "cliente",
+        "consecutivo",
         "nombre_receptor",
         "documento_receptor",
         "fecha_devolucion_prevista",

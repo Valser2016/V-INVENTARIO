@@ -89,6 +89,11 @@ describe("Préstamos y devoluciones", () => {
             await screen.findByLabelText("Nombre del colaborador"),
             "Ana Colaboradora",
         );
+        await user.type(screen.getByLabelText("Cliente"), "Acme Industrial");
+        await user.type(
+            screen.getByLabelText("Consecutivo del servicio"),
+            "OS-1001",
+        );
         await user.type(screen.getByLabelText("Documento"), "123456");
         await user.click(screen.getByLabelText(/PC-008 — Portátil de pruebas/));
         await user.click(screen.getByRole("button", { name: "Registrar préstamo" }));
@@ -97,6 +102,8 @@ describe("Préstamos y devoluciones", () => {
             expect(api.post).toHaveBeenCalledWith(
                 "/movimientos/prestamos/",
                 expect.objectContaining({
+                    cliente: "Acme Industrial",
+                    consecutivo: "OS-1001",
                     nombre_receptor: "Ana Colaboradora",
                     documento_receptor: "123456",
                     activos: [8],

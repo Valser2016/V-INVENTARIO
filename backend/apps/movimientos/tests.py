@@ -207,6 +207,8 @@ class PrestamoApiTests(APITestCase):
 
     def crear_payload(self, activos=None):
         return {
+            "cliente": "Cliente de prueba",
+            "consecutivo": "OS-2001",
             "nombre_receptor": "Colaborador de prueba",
             "documento_receptor": "123456",
             "fecha_devolucion_prevista": (
@@ -328,10 +330,44 @@ class PrestamoApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["total_activos"], 2)
         self.assertEqual(response.data["estado"], "Vigente")
+        self.assertEqual(response.data["cliente"], "Cliente de prueba")
+        self.assertEqual(response.data["consecutivo"], "OS-2001")
         self.activo_1.refresh_from_db()
         self.activo_2.refresh_from_db()
         self.assertEqual(self.activo_1.estado, self.prestado)
         self.assertEqual(self.activo_2.estado, self.prestado)
+
+    def test_rechaza_consecutivo_duplicado_en_prestamos_sin_distinguir_mayusculas(self):
+        self.client.post(
+            reverse("prestamo-list"),
+            self.crear_payload([self.activo_1.pk]),
+            format="json",
+        )
+
+        payload = self.crear_payload([self.activo_2.pk])
+        payload["consecutivo"] = "os-2001"
+        response = self.client.post(
+            reverse("prestamo-list"),
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("consecutivo", response.data)
+        self.assertFalse(self.activo_2.historial_prestamos.exists())
+
+    def test_exige_cliente_y_consecutivo_al_crear_prestamo(self):
+        for campo in ("cliente", "consecutivo"):
+            payload = self.crear_payload([self.activo_1.pk])
+            payload.pop(campo)
+            response = self.client.post(
+                reverse("prestamo-list"),
+                payload,
+                format="json",
+            )
+
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertIn(campo, response.data)
 
     def test_no_presta_un_activo_que_ya_esta_prestado(self):
         self.client.post(
@@ -515,6 +551,9 @@ class PrestamoApiTests(APITestCase):
             "Trabajo de mantenimiento en planta",
             Prestamo.objects.get(pk=response.data["prestamo_id"]).observaciones,
         )
+        prestamo = Prestamo.objects.get(pk=response.data["prestamo_id"])
+        self.assertEqual(prestamo.cliente, "Cliente de prueba")
+        self.assertEqual(prestamo.consecutivo, "OS-1001")
         self.activo_1.refresh_from_db()
         self.assertEqual(self.activo_1.estado, self.prestado)
 

@@ -252,6 +252,8 @@ class SolicitudPrestamoViewSet(viewsets.ModelViewSet):
 
             serializer = CrearPrestamoSerializer(
                 data={
+                    "cliente": solicitud.cliente,
+                    "consecutivo": solicitud.consecutivo,
                     "nombre_receptor": solicitud.nombre_receptor,
                     "documento_receptor": solicitud.documento_receptor,
                     "fecha_devolucion_prevista": solicitud.fecha_devolucion_prevista,
@@ -265,7 +267,10 @@ class SolicitudPrestamoViewSet(viewsets.ModelViewSet):
                     ),
                     "activos": activos_a_prestar,
                 },
-                context={"request": request},
+                context={
+                    "request": request,
+                    "solicitud": solicitud,
+                },
             )
             serializer.is_valid(raise_exception=True)
             prestamo = serializer.save()

@@ -153,6 +153,8 @@ class PrestamoSerializer(serializers.ModelSerializer):
         model = Prestamo
         fields = [
             "id",
+            "cliente",
+            "consecutivo",
             "nombre_receptor",
             "documento_receptor",
             "fecha_prestamo",
@@ -200,6 +202,16 @@ def _validar_fecha_devolucion_futura(value):
 
 
 class CrearPrestamoSerializer(serializers.ModelSerializer):
+    cliente = serializers.CharField(
+        max_length=150,
+        trim_whitespace=True,
+        allow_blank=False,
+    )
+    consecutivo = serializers.CharField(
+        max_length=50,
+        trim_whitespace=True,
+        allow_blank=False,
+    )
     activos = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=Activo.objects.filter(activo=True),
@@ -209,6 +221,8 @@ class CrearPrestamoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Prestamo
         fields = [
+            "cliente",
+            "consecutivo",
             "nombre_receptor",
             "documento_receptor",
             "fecha_devolucion_prevista",
@@ -218,6 +232,34 @@ class CrearPrestamoSerializer(serializers.ModelSerializer):
 
     def validate_fecha_devolucion_prevista(self, value):
         return _validar_fecha_devolucion_futura(value)
+
+    def validate_cliente(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Indica el cliente del servicio.")
+        return value
+
+    def validate_consecutivo(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Indica el consecutivo del servicio.")
+        if Prestamo.objects.filter(consecutivo__iexact=value).exclude(
+            consecutivo="",
+        ).exists():
+            raise serializers.ValidationError(
+                "Ya existe un préstamo con ese consecutivo."
+            )
+        solicitudes = SolicitudPrestamo.objects.filter(
+            consecutivo__iexact=value,
+        ).exclude(consecutivo="")
+        solicitud_actual = self.context.get("solicitud")
+        if solicitud_actual:
+            solicitudes = solicitudes.exclude(pk=solicitud_actual.pk)
+        if solicitudes.exists():
+            raise serializers.ValidationError(
+                "Ya existe una solicitud con ese consecutivo."
+            )
+        return value
 
     def validate_activos(self, activos):
         if not activos:
@@ -432,6 +474,12 @@ class CrearSolicitudPrestamoSerializer(serializers.ModelSerializer):
         ).exclude(consecutivo="").exists():
             raise serializers.ValidationError(
                 "Ya existe una solicitud con ese consecutivo."
+            )
+        if Prestamo.objects.filter(
+            consecutivo__iexact=value,
+        ).exclude(consecutivo="").exists():
+            raise serializers.ValidationError(
+                "Ya existe un préstamo con ese consecutivo."
             )
         return value
 

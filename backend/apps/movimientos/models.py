@@ -7,6 +7,8 @@ from apps.inventario.models import Activo, EstadoActivo, Ubicacion
 
 
 class Prestamo(models.Model):
+    cliente = models.CharField(max_length=150, blank=True, default="")
+    consecutivo = models.CharField(max_length=50, blank=True, default="")
     nombre_receptor = models.CharField(max_length=150)
     documento_receptor = models.CharField(max_length=30)
     fecha_devolucion_prevista = models.DateField()
@@ -21,6 +23,13 @@ class Prestamo(models.Model):
     class Meta:
         db_table = "prestamos"
         ordering = ["-fecha_prestamo", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                Lower("consecutivo"),
+                condition=~Q(consecutivo=""),
+                name="prestamo_consecutivo_ci_uniq",
+            )
+        ]
 
     def __str__(self):
         return f"Préstamo {self.pk} - {self.nombre_receptor}"

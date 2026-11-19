@@ -43,6 +43,8 @@ function Prestamos({ devoluciones = false }) {
     const [error, setError] = useState("");
     const [mensaje, setMensaje] = useState("");
     const [formulario, setFormulario] = useState({
+        cliente: "",
+        consecutivo: "",
         nombre_receptor: "",
         documento_receptor: "",
         fecha_devolucion_prevista: fechaMinimaPrestamo(),
@@ -91,6 +93,8 @@ function Prestamos({ devoluciones = false }) {
         try {
             await api.post("/movimientos/prestamos/", formulario);
             setFormulario({
+                cliente: "",
+                consecutivo: "",
                 nombre_receptor: "",
                 documento_receptor: "",
                 fecha_devolucion_prevista: fechaMinimaPrestamo(),
@@ -613,6 +617,29 @@ function Prestamos({ devoluciones = false }) {
                         </div>
                         <div className="form-grid">
                             <div className="form-group">
+                                <label htmlFor="cliente-prestamo">Cliente</label>
+                                <input
+                                    id="cliente-prestamo"
+                                    value={formulario.cliente}
+                                    onChange={(event) => cambiarCampo("cliente", event.target.value)}
+                                    required
+                                    maxLength="150"
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label htmlFor="consecutivo-prestamo">Consecutivo del servicio</label>
+                                <input
+                                    id="consecutivo-prestamo"
+                                    value={formulario.consecutivo}
+                                    onChange={(event) => cambiarCampo(
+                                        "consecutivo",
+                                        event.target.value,
+                                    )}
+                                    required
+                                    maxLength="50"
+                                />
+                            </div>
+                            <div className="form-group">
                                 <label htmlFor="nombre-receptor">Nombre del colaborador</label>
                                 <input
                                     id="nombre-receptor"
@@ -694,6 +721,18 @@ function Prestamos({ devoluciones = false }) {
                                     <article className="loan-history-item" key={prestamo.id}>
                                         <div>
                                             <strong>{prestamo.nombre_receptor}</strong>
+                                            {(prestamo.cliente || prestamo.consecutivo) && (
+                                                <span>
+                                                    {[
+                                                        prestamo.cliente
+                                                            ? `Cliente: ${prestamo.cliente}`
+                                                            : "",
+                                                        prestamo.consecutivo
+                                                            ? `Consecutivo: ${prestamo.consecutivo}`
+                                                            : "",
+                                                    ].filter(Boolean).join(" · ")}
+                                                </span>
+                                            )}
                                             <span>{prestamo.total_activos} activo(s) · Vence {prestamo.fecha_devolucion_prevista}</span>
                                         </div>
                                         <div className="loan-status-actions">
