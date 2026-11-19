@@ -13,7 +13,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 from datetime import timedelta
 from pathlib import Path
 import os
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from dotenv import load_dotenv
 
@@ -168,9 +168,9 @@ def _database_config():
         return {
             "ENGINE": "django.db.backends.postgresql",
             "NAME": parsed.path.lstrip("/"),
-            "USER": parsed.username or "postgres",
-            "PASSWORD": parsed.password or "",
-            "HOST": parsed.hostname or "localhost",
+            "USER": unquote(parsed.username or "postgres"),
+            "PASSWORD": unquote(parsed.password or ""),
+            "HOST": unquote(parsed.hostname or "localhost"),
             "PORT": str(parsed.port or 5432),
         }
 
