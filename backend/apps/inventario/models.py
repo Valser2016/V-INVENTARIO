@@ -176,6 +176,12 @@ class Activo(models.Model):
 
     observaciones = models.TextField(blank=True)
 
+    foto = models.ImageField(
+        upload_to="activos/%Y/%m/",
+        null=True,
+        blank=True,
+    )
+
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_modificacion = models.DateTimeField(auto_now=True)
 

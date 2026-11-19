@@ -4,9 +4,12 @@ import { useSession } from "../context/SessionContext";
 import {
     SeccionClasificacion,
     SeccionControl,
+    SeccionFotoActivo,
     SeccionInformacion,
     SeccionObservaciones,
 } from "../components/activo/FormularioActivo";
+import FotoActivo from "../components/activo/FotoActivo";
+import { crearFormDataActivo } from "../utils/activoFormData";
 
 const formularioVacio = () => ({
     tipo_activo: "",
@@ -54,6 +57,8 @@ function ListadoActivos() {
     const [mensaje, setMensaje] = useState("");
     const [activoEditado, setActivoEditado] = useState(null);
     const [formulario, setFormulario] = useState(formularioVacio);
+    const [fotoArchivo, setFotoArchivo] = useState(null);
+    const [quitarFoto, setQuitarFoto] = useState(false);
     const [tipos, setTipos] = useState([]);
     const [categorias, setCategorias] = useState([]);
     const [estados, setEstados] = useState([]);
@@ -161,6 +166,8 @@ function ListadoActivos() {
                 valor: activo.valor ?? "",
                 observaciones: activo.observaciones ?? "",
             });
+            setFotoArchivo(null);
+            setQuitarFoto(false);
             setActivoEditado(activo);
         } catch (requestError) {
             console.error("Error cargando datos para editar activo:", requestError);
@@ -178,9 +185,21 @@ function ListadoActivos() {
         }));
     };
 
+    const cambiarFoto = (archivo) => {
+        setFotoArchivo(archivo);
+        setQuitarFoto(false);
+    };
+
+    const marcarFotoParaQuitar = () => {
+        setFotoArchivo(null);
+        setQuitarFoto(Boolean(activoEditado?.foto_url));
+    };
+
     const cancelarEdicion = () => {
         setActivoEditado(null);
         setFormulario(formularioVacio());
+        setFotoArchivo(null);
+        setQuitarFoto(false);
         setCategorias([]);
         setError("");
     };
@@ -206,9 +225,14 @@ function ListadoActivos() {
                 fecha_adquisicion: formulario.fecha_adquisicion || null,
                 valor: formulario.valor ? Number(formulario.valor) : null,
             };
+            const datosEnvio = fotoArchivo
+                ? crearFormDataActivo(datos, fotoArchivo)
+                : quitarFoto
+                    ? { ...datos, foto: null }
+                    : datos;
             const response = await api.patch(
                 `/levantamiento/activos/${activoEditado.id}/`,
-                datos,
+                datosEnvio,
             );
             setPagina((actual) => ({
                 ...actual,
@@ -300,6 +324,14 @@ function ListadoActivos() {
                         cambiarCampo={cambiarCampo}
                     />
                     <SeccionInformacion formulario={formulario} cambiarCampo={cambiarCampo} />
+                    <SeccionFotoActivo
+                        fotoUrl={activoEditado.foto_url}
+                        fotoArchivo={fotoArchivo}
+                        quitarFoto={quitarFoto}
+                        cambiarFoto={cambiarFoto}
+                        quitarFotoActivo={marcarFotoParaQuitar}
+                        restaurarFoto={() => setQuitarFoto(false)}
+                    />
                     <SeccionControl
                         formulario={formulario}
                         ubicaciones={ubicaciones}
@@ -337,6 +369,7 @@ function ListadoActivos() {
                                 <thead>
                                     <tr>
                                         <th>Código</th>
+                                        <th>Foto</th>
                                         <th>Nombre</th>
                                         <th>Tipo</th>
                                         <th>Categoría</th>
@@ -349,6 +382,12 @@ function ListadoActivos() {
                                     {pagina?.results.length ? pagina.results.map((activo) => (
                                         <tr key={activo.id}>
                                             <td>{activo.codigo_interno}</td>
+                                            <td>
+                                                <FotoActivo
+                                                    url={activo.foto_url}
+                                                    alt={`Foto de ${activo.codigo_interno}`}
+                                                />
+                                            </td>
                                             <td>{activo.nombre}</td>
                                             <td>{activo.tipo_activo_nombre}</td>
                                             <td>{activo.categoria_nombre}</td>
@@ -384,7 +423,7 @@ function ListadoActivos() {
                                         </tr>
                                     )) : (
                                         <tr>
-                                            <td colSpan={puedeModificar ? 7 : 6}>
+                                            <td colSpan={puedeModificar ? 8 : 7}>
                                                 No hay activos registrados.
                                             </td>
                                         </tr>

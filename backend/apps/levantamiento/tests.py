@@ -1,12 +1,15 @@
 from datetime import date, timedelta
+from io import BytesIO
 import os
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from openpyxl import Workbook
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -337,6 +340,65 @@ class InventarioTests(APITestCase):
         self.assertTrue(
             any(item["nombre"] == "Computador" for item in list_response.json())
         )
+
+    def test_crea_activo_con_foto_y_la_entrega_solo_a_usuarios_autorizados(self):
+        imagen_buffer = BytesIO()
+        Image.new("RGB", (4, 4), color="green").save(imagen_buffer, format="PNG")
+        imagen_bytes = imagen_buffer.getvalue()
+        imagen_buffer.close()
+
+        with TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                respuesta = self.client.post(
+                    reverse("levantamiento-crear-activo"),
+                    {
+                        **self._payload_activo(),
+                        "activo": True,
+                        "foto": SimpleUploadedFile(
+                            "activo.png",
+                            imagen_bytes,
+                            content_type="image/png",
+                        ),
+                    },
+                    format="multipart",
+                )
+
+                self.assertEqual(respuesta.status_code, status.HTTP_201_CREATED)
+                self.assertEqual(
+                    respuesta.data["foto_url"].split("?")[0],
+                    f"/levantamiento/activos/{respuesta.data['id']}/foto/",
+                )
+                activo = Activo.objects.get(pk=respuesta.data["id"])
+                self.assertTrue(activo.activo)
+                self.assertTrue(activo.foto.name.startswith("activos/"))
+
+                foto = self.client.get(
+                    reverse("levantamiento-activo-foto", args=[activo.pk]),
+                )
+                self.assertEqual(foto.status_code, status.HTTP_200_OK)
+                self.assertEqual(foto["Content-Type"], "image/png")
+                contenido_foto = b"".join(foto.streaming_content)
+                foto.close()
+                self.assertEqual(contenido_foto, imagen_bytes)
+
+                ruta_foto = activo.foto.path
+                eliminacion = self.client.patch(
+                    reverse("levantamiento-detalle-activo", args=[activo.pk]),
+                    {"foto": None},
+                    content_type="application/json",
+                )
+                self.assertEqual(eliminacion.status_code, status.HTTP_200_OK)
+                self.assertIsNone(eliminacion.data["foto_url"])
+                self.assertFalse(os.path.exists(ruta_foto))
+
+                self.client.force_authenticate(user=None)
+                no_autorizada = self.client.get(
+                    reverse("levantamiento-activo-foto", args=[activo.pk]),
+                )
+                self.assertEqual(
+                    no_autorizada.status_code,
+                    status.HTTP_401_UNAUTHORIZED,
+                )
 
     def _payload_activo(self, **overrides):
         payload = {

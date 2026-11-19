@@ -1487,6 +1487,35 @@ a {
     font-size: 9px;
 }
 
+.asset-photo-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.asset-photo {
+    display: block;
+    width: 58px;
+    height: 58px;
+    border-radius: 7px;
+    object-fit: cover;
+}
+
+.asset-photo-placeholder {
+    display: grid;
+    min-width: 72px;
+    min-height: 58px;
+    max-width: 180px;
+    padding: 6px;
+    place-items: center;
+    border-radius: 7px;
+    color: #707870;
+    background: #f0f3ef;
+    font-size: 10px;
+    overflow-wrap: anywhere;
+    text-align: center;
+}
+
 @media (max-width: 1150px) {
     .content-container {
         padding-right: 28px;

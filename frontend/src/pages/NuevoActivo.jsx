@@ -4,9 +4,11 @@ import api from "../services/api";
 import {
     SeccionClasificacion,
     SeccionControl,
+    SeccionFotoActivo,
     SeccionInformacion,
     SeccionObservaciones,
 } from "../components/activo/FormularioActivo";
+import { crearFormDataActivo } from "../utils/activoFormData";
 
 const formularioVacio = () => ({
     tipo_activo: "",
@@ -35,6 +37,7 @@ function NuevoActivo() {
     const [ubicaciones, setUbicaciones] = useState([]);
     const [usuarios, setUsuarios] = useState([]);
     const [formulario, setFormulario] = useState(formularioVacio);
+    const [fotoArchivo, setFotoArchivo] = useState(null);
     const [cargando, setCargando] = useState(true);
     const [guardando, setGuardando] = useState(false);
     const [mensaje, setMensaje] = useState("");
@@ -126,12 +129,16 @@ function NuevoActivo() {
                 fecha_adquisicion: formulario.fecha_adquisicion || null,
                 valor: formulario.valor ? Number(formulario.valor) : null,
             };
-            const response = await api.post("/levantamiento/activos/", datos);
+            const datosEnvio = fotoArchivo
+                ? crearFormDataActivo(datos, fotoArchivo)
+                : datos;
+            const response = await api.post("/levantamiento/activos/", datosEnvio);
 
             setMensaje(
                 `Activo creado correctamente. Código: ${response.data.codigo_interno}`
             );
             setFormulario(formularioVacio());
+            setFotoArchivo(null);
             setCategorias([]);
         } catch (err) {
             console.error("Error creando activo:", err);
@@ -211,6 +218,11 @@ function NuevoActivo() {
                 <SeccionInformacion
                     formulario={formulario}
                     cambiarCampo={cambiarCampo}
+                />
+                <SeccionFotoActivo
+                    fotoArchivo={fotoArchivo}
+                    cambiarFoto={setFotoArchivo}
+                    quitarFotoActivo={() => setFotoArchivo(null)}
                 />
                 <SeccionControl
                     formulario={formulario}

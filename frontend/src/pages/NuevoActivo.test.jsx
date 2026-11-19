@@ -109,6 +109,27 @@ describe("NuevoActivo", () => {
         });
     });
 
+    it("carga la foto seleccionada junto con el activo", async () => {
+        const { user } = await prepararFormulario();
+        const foto = new File(["foto de prueba"], "activo.png", {
+            type: "image/png",
+        });
+        mockApi.post.mockResolvedValue({
+            data: { codigo_interno: "PC-001" },
+        });
+
+        await user.upload(screen.getByLabelText("Imagen"), foto);
+        await user.click(screen.getByRole("button", { name: "Guardar activo" }));
+
+        await waitFor(() => {
+            const datos = mockApi.post.mock.calls[0][1];
+            expect(datos).toBeInstanceOf(FormData);
+            expect(datos.get("foto")).toBe(foto);
+            expect(datos.get("nombre")).toBe("Equipo de prueba");
+            expect(datos.get("activo")).toBe("true");
+        });
+    });
+
     it("muestra los errores de validación de la API por campo", async () => {
         const { user } = await prepararFormulario();
         mockApi.post.mockRejectedValue({

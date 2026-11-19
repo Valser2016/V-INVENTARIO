@@ -1,4 +1,5 @@
 import React from "react";
+import FotoActivo from "./FotoActivo";
 
 export function CampoFormulario({ id, label, required = false, children }) {
     return (
@@ -247,5 +248,66 @@ export function SeccionObservaciones({ formulario, cambiarCampo }) {
                 />
             </CampoFormulario>
         </SeccionFormulario>
+    );
+}
+
+export function SeccionFotoActivo({
+    fotoUrl,
+    fotoArchivo,
+    quitarFoto = false,
+    cambiarFoto,
+    quitarFotoActivo,
+    restaurarFoto,
+}) {
+    return (
+        <section className="card">
+            <div className="card-header">
+                <div className="section-icon">▧</div>
+                <div>
+                    <h2>Foto del activo</h2>
+                    <p>Adjunta una imagen JPG, PNG o WebP de hasta 10 MB.</p>
+                </div>
+            </div>
+            <div className="form-grid">
+                <div className="form-group">
+                    <label htmlFor="foto-activo">Imagen</label>
+                    <input
+                        id="foto-activo"
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) => cambiarFoto(event.target.files?.[0] ?? null)}
+                    />
+                </div>
+                <div className="asset-photo-preview">
+                    {fotoArchivo ? (
+                        <span className="asset-photo-placeholder">
+                            Archivo seleccionado: {fotoArchivo.name}
+                        </span>
+                    ) : quitarFoto ? (
+                        <span className="asset-photo-placeholder">La foto se quitará al guardar.</span>
+                    ) : (
+                        <FotoActivo url={fotoUrl} alt="Foto del activo" />
+                    )}
+                    {((fotoUrl && !quitarFoto) || fotoArchivo) && (
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={quitarFotoActivo}
+                        >
+                            Quitar foto
+                        </button>
+                    )}
+                    {quitarFoto && (
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={restaurarFoto}
+                        >
+                            Conservar foto actual
+                        </button>
+                    )}
+                </div>
+            </div>
+        </section>
     );
 }

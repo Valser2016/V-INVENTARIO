@@ -1,3 +1,6 @@
+from PIL import Image, UnidentifiedImageError
+from django.http import FileResponse, Http404
+from django.shortcuts import get_object_or_404
 from django.db.models import Count, Q
 from rest_framework import generics, viewsets
 from rest_framework.pagination import PageNumberPagination
@@ -151,6 +154,29 @@ class ActivoLevantamientoDetalleView(generics.RetrieveUpdateAPIView):
         "responsable",
     )
     http_method_names = ["get", "put", "patch", "head", "options"]
+
+
+class FotoActivoView(APIView):
+    permission_classes = [PuedeConsultarYCrearActivos]
+
+    def get(self, request, pk):
+        activo = get_object_or_404(Activo, pk=pk, activo=True)
+        if not activo.foto:
+            raise Http404("El activo no tiene una foto.")
+
+        foto = activo.foto.open("rb")
+        try:
+            with Image.open(foto) as imagen:
+                content_type = Image.MIME.get(
+                    imagen.format,
+                    "application/octet-stream",
+                )
+        except UnidentifiedImageError as error:
+            foto.close()
+            raise Http404("La foto del activo no es válida.") from error
+
+        foto.seek(0)
+        return FileResponse(foto, content_type=content_type)
 
 
 class ResumenActivosLevantamientoView(APIView):

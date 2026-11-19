@@ -9,6 +9,7 @@ from .views import (
     UsuariosLevantamientoView,
     ActivosLevantamientoView,
     ActivoLevantamientoDetalleView,
+    FotoActivoView,
     ResumenActivosLevantamientoView,
     TipoActivoConfiguracionViewSet,
     CategoriaActivoConfiguracionViewSet,
@@ -83,6 +84,12 @@ urlpatterns = [
         name="levantamiento-crear-activo",
 
     ),
+    path(
+        "activos/<int:pk>/foto/",
+        FotoActivoView.as_view(),
+        name="levantamiento-activo-foto",
+    ),
+
     path(
         "activos/<int:pk>/",
         ActivoLevantamientoDetalleView.as_view(),

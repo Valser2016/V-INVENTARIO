@@ -41,6 +41,19 @@ Para el servicio backend, configura:
 
 Railway inyectará `DATABASE_URL` y el backend utilizará automáticamente esa conexión.
 
+## Almacenamiento de fotos de activos
+
+Las fotos se guardan en el sistema de archivos del backend. Para conservarlas
+entre despliegues, crea un **Volume** en Railway para el servicio backend,
+móntalo en `/app/media` y agrega la variable:
+
+- `MEDIA_ROOT=/app/media`
+
+El volumen debe estar montado en el mismo servicio que ejecuta Django. Sin él,
+los archivos locales pueden desaparecer al reemplazar la instancia. Las fotos
+se consultan mediante la API autenticada; no se necesita configurar un dominio
+público de archivos.
+
 El proyecto no tiene flujos de envío de correo actualmente. Si se habilitan,
 configura en Railway `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`,
 `SMTP_PASSWORD` y el indicador TLS apropiado (`SMTP_USE_TLS` o
@@ -81,7 +94,7 @@ gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
 Configura como comando de construcción:
 
 ```sh
-python manage.py collectstatic --noinput
+./.venv/bin/python manage.py collectstatic --noinput
 ```
 
 WhiteNoise sirve los archivos estáticos recolectados, incluidos los de Django
@@ -103,11 +116,11 @@ Si el servicio está configurado con el builder legado **Nixpacks**, cámbialo a
 
 Railway expone el puerto mediante la variable `PORT`; el contenedor debe escuchar en ese puerto en lugar de fijar `8000`.
 
-Configura `python manage.py migrate` como **Pre-deploy Command** del servicio
+Configura `./.venv/bin/python manage.py migrate` como **Pre-deploy Command** del servicio
 backend para aplicar las migraciones con el entorno de producción antes de
 iniciar una nueva versión. Antes del primer despliegue, respalda PostgreSQL.
 Después de migrar, crea la cuenta inicial de Django Admin desde el entorno
-del servicio backend con `python manage.py createsuperuser`. Luego inicia
+del servicio backend con `./.venv/bin/python manage.py createsuperuser`. Luego inicia
 sesión en `/admin/` y asigna a esa cuenta el rol de aplicación `Administrador`;
 el superusuario de Django no recibe ese rol automáticamente.
 

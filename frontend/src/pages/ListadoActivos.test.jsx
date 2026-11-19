@@ -114,6 +114,27 @@ describe("Edición de inventario", () => {
         expect(await screen.findByText("Equipo actualizado")).toBeInTheDocument();
     });
 
+    it("permite agregar una foto al editar el activo", async () => {
+        prepararRespuestas();
+        const actualizado = { ...activo, foto_url: "/levantamiento/activos/1/foto/" };
+        vi.mocked(api.patch).mockResolvedValue({ data: actualizado });
+        const user = userEvent.setup();
+        renderPage();
+
+        await user.click(await screen.findByRole("button", { name: "Editar" }));
+        const foto = new File(["foto de prueba"], "activo.png", {
+            type: "image/png",
+        });
+        await user.upload(screen.getByLabelText("Imagen"), foto);
+        await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+        await waitFor(() => {
+            const datos = vi.mocked(api.patch).mock.calls[0][1];
+            expect(datos).toBeInstanceOf(FormData);
+            expect(datos.get("foto")).toBe(foto);
+        });
+    });
+
     it("permite desactivar un activo y oculta sus acciones a roles de solo lectura", async () => {
         prepararRespuestas();
         vi.spyOn(window, "confirm").mockReturnValue(true);

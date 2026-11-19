@@ -109,6 +109,12 @@ class UsuarioLevantamientoSerializer(serializers.ModelSerializer):
 
 
 class ActivoLevantamientoSerializer(serializers.ModelSerializer):
+    foto = serializers.ImageField(
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    foto_url = serializers.SerializerMethodField()
     tipo_activo_nombre = serializers.CharField(
         source="tipo_activo.nombre",
         read_only=True,
@@ -152,13 +158,31 @@ class ActivoLevantamientoSerializer(serializers.ModelSerializer):
             "cuenta_con_manual",
             "valor",
             "observaciones",
+            "foto",
+            "foto_url",
             "activo",
         ]
 
         read_only_fields = [
             "id",
             "codigo_interno",
+            "foto_url",
         ]
+
+    def get_foto_url(self, obj):
+        if not obj.foto:
+            return None
+        return (
+            f"/levantamiento/activos/{obj.pk}/foto/"
+            f"?v={obj.fecha_modificacion.timestamp()}"
+        )
+
+    def validate_foto(self, value):
+        if value and value.size > 10 * 1024 * 1024:
+            raise serializers.ValidationError(
+                "La foto no puede superar los 10 MB."
+            )
+        return value
 
     def validate(self, attrs):
 
@@ -195,10 +219,17 @@ class ActivoLevantamientoSerializer(serializers.ModelSerializer):
         return activo
 
     def update(self, instance, validated_data):
+        foto_anterior = instance.foto
+        nombre_foto_anterior = foto_anterior.name if foto_anterior else ""
         for field, value in validated_data.items():
             setattr(instance, field, value)
         instance.modificado_por = self.context["request"].user
         instance.save()
+        if (
+            foto_anterior
+            and nombre_foto_anterior != (instance.foto.name if instance.foto else "")
+        ):
+            foto_anterior.storage.delete(nombre_foto_anterior)
         return instance
 
     def get_nombre_completo(self, obj):
