@@ -378,7 +378,6 @@ class InventarioTests(APITestCase):
                 self.assertEqual(foto.status_code, status.HTTP_200_OK)
                 self.assertEqual(foto["Content-Type"], "image/png")
                 contenido_foto = b"".join(foto.streaming_content)
-                foto.close()
                 self.assertEqual(contenido_foto, imagen_bytes)
 
                 ruta_foto = activo.foto.path
