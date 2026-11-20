@@ -18,6 +18,9 @@ En GitHub, configura al menos:
 - `RAILWAY_PROJECT_ID_BACKEND`: ID del proyecto Railway que contiene el servicio backend.
 - `RAILWAY_PROJECT_ID_FRONTEND`: ID del proyecto Railway que contiene el servicio frontend.
 
+El workflow enlaza cada proyecto usando `railway link --project` y selecciona
+el entorno `production` y el servicio correspondiente antes de desplegar.
+
 No es necesario guardar `DATABASE_URL`, `SECRET_KEY`, `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS` ni `CSRF_TRUSTED_ORIGINS` en GitHub. Deben configurarse como variables secretas en Railway para cada servicio.
 
 El workflow de despliegue se activa cuando termina correctamente el workflow
