@@ -125,9 +125,18 @@ Si el servicio está configurado con el builder legado **Nixpacks**, cámbialo a
 
 Railway expone el puerto mediante la variable `PORT`; el contenedor debe escuchar en ese puerto en lugar de fijar `8000`.
 
-Configura `./.venv/bin/python manage.py migrate` como **Pre-deploy Command** del servicio
-backend para aplicar las migraciones con el entorno de producción antes de
-iniciar una nueva versión. Antes del primer despliegue, respalda PostgreSQL.
+Configura el siguiente **Pre-deploy Command** del servicio backend para aplicar
+las migraciones y agregar los catálogos locales faltantes antes de iniciar una
+nueva versión:
+
+```sh
+./.venv/bin/python manage.py migrate && ./.venv/bin/python manage.py importar_catalogos_locales
+```
+
+La importación conserva los tipos, categorías, estados, ubicaciones y roles que
+ya existan en Railway, y agrega solo los faltantes. No importa activos,
+usuarios, préstamos ni movimientos. Antes del primer despliegue, respalda
+PostgreSQL.
 Después de migrar, crea la cuenta inicial de Django Admin desde el entorno
 del servicio backend con `./.venv/bin/python manage.py createsuperuser`. Luego inicia
 sesión en `/admin/` y asigna a esa cuenta el rol de aplicación `Administrador`;
