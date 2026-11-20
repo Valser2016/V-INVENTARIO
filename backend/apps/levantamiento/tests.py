@@ -388,10 +388,18 @@ class InventarioTests(APITestCase):
                 libro = load_workbook(
                     BytesIO(b"".join(hoja_vida.streaming_content)),
                 )
+                hoja = libro["HOJA DE VIDA EQUIPOS"]
+                self.assertEqual(len(hoja._images), 2)
                 self.assertEqual(
-                    len(libro["HOJA DE VIDA EQUIPOS"]._images),
-                    2,
+                    libro.sheetnames,
+                    ["HOJA DE VIDA EQUIPOS"],
                 )
+                foto = next(
+                    imagen
+                    for imagen in hoja._images
+                    if imagen.anchor._from.col == 14
+                )
+                self.assertEqual((foto.width, foto.height), (1099, 320))
                 libro.close()
 
                 ruta_foto = activo.foto.path
@@ -446,10 +454,7 @@ class InventarioTests(APITestCase):
         self.assertEqual(hoja["F6"].value, "Marca")
         self.assertEqual(hoja["F12"].value, "Oficina Central")
         self.assertEqual(hoja["F13"].value, "SI")
-        datos_extra = libro["DATOS COMPLEMENTARIOS"]
-        self.assertEqual(datos_extra["B2"].value, "PC-001")
-        self.assertEqual(datos_extra["B4"].value, "Portátil")
-        self.assertEqual(datos_extra["B5"].value, "Disponible")
+        self.assertEqual(libro.sheetnames, ["HOJA DE VIDA EQUIPOS"])
         libro.close()
 
     def test_elimina_permanentemente_activo_sin_historial(self):

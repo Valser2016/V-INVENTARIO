@@ -3,8 +3,9 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 from openpyxl.drawing.image import Image as SpreadsheetImage
-from openpyxl.styles import Alignment, Font, PatternFill
-from PIL import Image as PilImage
+from openpyxl.utils import get_column_letter
+from openpyxl.utils.units import points_to_pixels
+from PIL import Image as PilImage, ImageOps
 
 
 PLANTILLA_HOJA_VIDA = (
@@ -12,6 +13,26 @@ PLANTILLA_HOJA_VIDA = (
     / "plantillas"
     / "OYS-FO-11 HOJA DE VIDA MAQUINAS.xlsx"
 )
+FOTO_FILA_INICIO = 6
+FOTO_FILA_FIN = 14
+FOTO_COLUMNA_INICIO = 15
+FOTO_COLUMNA_FIN = 27
+
+
+def _dimensiones_campo_foto(hoja):
+    ancho = sum(
+        int(
+            (hoja.column_dimensions[get_column_letter(columna)].width or 8.43)
+            * 7
+            + 5
+        )
+        for columna in range(FOTO_COLUMNA_INICIO, FOTO_COLUMNA_FIN + 1)
+    )
+    alto = sum(
+        points_to_pixels(hoja.row_dimensions[fila].height or 15)
+        for fila in range(FOTO_FILA_INICIO, FOTO_FILA_FIN + 1)
+    )
+    return ancho, alto
 
 
 def crear_hoja_vida_excel(activo):
@@ -33,40 +54,15 @@ def crear_hoja_vida_excel(activo):
         with activo.foto.open("rb") as archivo_foto:
             with PilImage.open(archivo_foto) as imagen_original:
                 modo = "RGBA" if "A" in imagen_original.getbands() else "RGB"
-                imagen_original.convert(modo).save(foto_buffer, format="PNG")
+                imagen = ImageOps.fit(
+                    imagen_original.convert(modo),
+                    _dimensiones_campo_foto(hoja),
+                    method=PilImage.Resampling.LANCZOS,
+                )
+                imagen.save(foto_buffer, format="PNG")
         foto_buffer.seek(0)
         foto = SpreadsheetImage(foto_buffer)
-        escala = min(360 / foto.width, 190 / foto.height, 1)
-        foto.width *= escala
-        foto.height *= escala
         hoja.add_image(foto, "O6")
-
-    hoja_extra = libro.create_sheet("DATOS COMPLEMENTARIOS")
-    hoja_extra.append(["Dato del inventario", "Valor"])
-    datos_adicionales = [
-        ("Código interno", activo.codigo_interno),
-        ("Tipo de activo", activo.tipo_activo.nombre),
-        ("Categoría", activo.categoria.nombre),
-        ("Estado", activo.estado.nombre),
-        ("Modalidad de control", activo.get_modalidad_control_display()),
-        (
-            "Responsable",
-            str(activo.responsable) if activo.responsable else "Sin responsable",
-        ),
-        ("Valor", activo.valor),
-        ("Observaciones", activo.observaciones),
-    ]
-    for etiqueta, valor in datos_adicionales:
-        hoja_extra.append([etiqueta, valor])
-
-    hoja_extra.column_dimensions["A"].width = 28
-    hoja_extra.column_dimensions["B"].width = 72
-    for celda in hoja_extra[1]:
-        celda.font = Font(bold=True, color="FFFFFF")
-        celda.fill = PatternFill("solid", fgColor="0D6F0C")
-        celda.alignment = Alignment(vertical="center")
-    for fila in hoja_extra.iter_rows(min_row=2, min_col=2, max_col=2):
-        fila[0].alignment = Alignment(wrap_text=True, vertical="top")
 
     archivo = BytesIO()
     libro.save(archivo)
