@@ -10,7 +10,6 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from openpyxl import Workbook, load_workbook
-from openpyxl.utils.units import pixels_to_EMU
 from PIL import Image
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
@@ -28,6 +27,8 @@ from apps.movimientos.models import DetallePrestamo, Prestamo, SolicitudPrestamo
 from apps.usuarios.models import Rol
 from apps.levantamiento.services.hoja_vida_excel import (
     _dimensiones_campo_foto,
+    _marcador_columna,
+    _marcador_fila,
 )
 from apps.levantamiento.services.importador_excel import validar_excel
 
@@ -402,7 +403,7 @@ class InventarioTests(APITestCase):
                 foto = next(
                     imagen
                     for imagen in hoja._images
-                    if imagen.anchor._from.col == 14
+                    if imagen.anchor._from.row >= 5
                 )
                 plantilla = load_workbook(
                     Path(__file__).resolve().parent
@@ -414,15 +415,21 @@ class InventarioTests(APITestCase):
                     hoja_plantilla,
                 )
                 self.assertEqual((foto.width, foto.height), (4, 4))
-                self.assertEqual(foto.anchor._from.col, 14)
-                self.assertEqual(foto.anchor._from.row, 5)
-                self.assertEqual(
-                    foto.anchor._from.colOff,
-                    pixels_to_EMU((ancho_campo - foto.width) // 2),
+                columna, col_offset = _marcador_columna(
+                    hoja_plantilla,
+                    (ancho_campo - foto.width) // 2,
+                )
+                fila, row_offset = _marcador_fila(
+                    hoja_plantilla,
+                    (alto_campo - foto.height) // 2,
                 )
                 self.assertEqual(
-                    foto.anchor._from.rowOff,
-                    pixels_to_EMU((alto_campo - foto.height) // 2),
+                    (foto.anchor._from.col, foto.anchor._from.colOff),
+                    (columna, col_offset),
+                )
+                self.assertEqual(
+                    (foto.anchor._from.row, foto.anchor._from.rowOff),
+                    (fila, row_offset),
                 )
                 self.assertEqual(
                     {
@@ -543,7 +550,7 @@ class InventarioTests(APITestCase):
         foto = next(
             imagen
             for imagen in hoja._images
-            if imagen.anchor._from.col == 14
+            if imagen.anchor._from.row >= 5
         )
         ancho_campo, alto_campo = _dimensiones_campo_foto(hoja)
         self.assertLessEqual(foto.width, ancho_campo)

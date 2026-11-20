@@ -20,39 +20,65 @@ FOTO_COLUMNA_INICIO = 15
 FOTO_COLUMNA_FIN = 27
 
 
+def _ancho_columna_px(hoja, columna):
+    dimension = next(
+        (
+            item
+            for item in hoja.column_dimensions.values()
+            if item.min <= columna <= item.max
+        ),
+        None,
+    )
+    ancho = (
+        dimension.width
+        if dimension and dimension.width is not None
+        else hoja.sheet_format.defaultColWidth
+    )
+    if ancho is None:
+        ancho = 8.43
+    return int(ancho * 7 + 5)
+
+
+def _alto_fila_px(hoja, fila):
+    dimension = hoja.row_dimensions.get(fila)
+    alto = (
+        dimension.height
+        if dimension and dimension.height is not None
+        else hoja.sheet_format.defaultRowHeight
+    )
+    if alto is None:
+        alto = 15
+    return points_to_pixels(alto)
+
+
 def _dimensiones_campo_foto(hoja):
-    ancho = 0
-    for columna in range(FOTO_COLUMNA_INICIO, FOTO_COLUMNA_FIN + 1):
-        dimension = next(
-            (
-                item
-                for item in hoja.column_dimensions.values()
-                if item.min <= columna <= item.max
-            ),
-            None,
-        )
-        ancho_columna = (
-            dimension.width
-            if dimension and dimension.width is not None
-            else hoja.sheet_format.defaultColWidth
-        )
-        if ancho_columna is None:
-            ancho_columna = 8.43
-        ancho += int(ancho_columna * 7 + 5)
-
-    alto = 0
-    for fila in range(FOTO_FILA_INICIO, FOTO_FILA_FIN + 1):
-        dimension = hoja.row_dimensions.get(fila)
-        alto_fila = (
-            dimension.height
-            if dimension and dimension.height is not None
-            else hoja.sheet_format.defaultRowHeight
-        )
-        if alto_fila is None:
-            alto_fila = 15
-        alto += points_to_pixels(alto_fila)
-
+    ancho = sum(
+        _ancho_columna_px(hoja, columna)
+        for columna in range(FOTO_COLUMNA_INICIO, FOTO_COLUMNA_FIN + 1)
+    )
+    alto = sum(
+        _alto_fila_px(hoja, fila)
+        for fila in range(FOTO_FILA_INICIO, FOTO_FILA_FIN + 1)
+    )
     return ancho, alto
+
+
+def _marcador_columna(hoja, desplazamiento):
+    for columna in range(FOTO_COLUMNA_INICIO, FOTO_COLUMNA_FIN + 1):
+        ancho = _ancho_columna_px(hoja, columna)
+        if desplazamiento < ancho:
+            return columna - 1, pixels_to_EMU(desplazamiento)
+        desplazamiento -= ancho
+    raise ValueError("El desplazamiento horizontal excede el campo de foto.")
+
+
+def _marcador_fila(hoja, desplazamiento):
+    for fila in range(FOTO_FILA_INICIO, FOTO_FILA_FIN + 1):
+        alto = _alto_fila_px(hoja, fila)
+        if desplazamiento < alto:
+            return fila - 1, pixels_to_EMU(desplazamiento)
+        desplazamiento -= alto
+    raise ValueError("El desplazamiento vertical excede el campo de foto.")
 
 
 def crear_hoja_vida_excel(activo):
@@ -85,12 +111,14 @@ def crear_hoja_vida_excel(activo):
         foto = SpreadsheetImage(foto_buffer)
         desplazamiento_x = (ancho_campo - foto.width) // 2
         desplazamiento_y = (alto_campo - foto.height) // 2
+        columna, col_offset = _marcador_columna(hoja, desplazamiento_x)
+        fila, row_offset = _marcador_fila(hoja, desplazamiento_y)
         foto.anchor = OneCellAnchor(
             _from=AnchorMarker(
-                col=FOTO_COLUMNA_INICIO - 1,
-                colOff=pixels_to_EMU(desplazamiento_x),
-                row=FOTO_FILA_INICIO - 1,
-                rowOff=pixels_to_EMU(desplazamiento_y),
+                col=columna,
+                colOff=col_offset,
+                row=fila,
+                rowOff=row_offset,
             ),
             ext=XDRPositiveSize2D(
                 cx=pixels_to_EMU(foto.width),
