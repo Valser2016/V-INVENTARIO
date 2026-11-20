@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from io import BytesIO
 import os
+from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 
 from django.contrib.auth import get_user_model
@@ -9,6 +10,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from openpyxl import Workbook, load_workbook
+from openpyxl.utils.units import pixels_to_EMU
 from PIL import Image
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
@@ -24,6 +26,9 @@ from apps.inventario.models import (
 )
 from apps.movimientos.models import DetallePrestamo, Prestamo, SolicitudPrestamo
 from apps.usuarios.models import Rol
+from apps.levantamiento.services.hoja_vida_excel import (
+    _dimensiones_campo_foto,
+)
 from apps.levantamiento.services.importador_excel import validar_excel
 
 User = get_user_model()
@@ -399,7 +404,47 @@ class InventarioTests(APITestCase):
                     for imagen in hoja._images
                     if imagen.anchor._from.col == 14
                 )
+                plantilla = load_workbook(
+                    Path(__file__).resolve().parent
+                    / "plantillas"
+                    / "OYS-FO-11 HOJA DE VIDA MAQUINAS.xlsx",
+                )
+                hoja_plantilla = plantilla["HOJA DE VIDA EQUIPOS"]
+                ancho_campo, alto_campo = _dimensiones_campo_foto(
+                    hoja_plantilla,
+                )
                 self.assertEqual((foto.width, foto.height), (4, 4))
+                self.assertEqual(foto.anchor._from.col, 14)
+                self.assertEqual(foto.anchor._from.row, 5)
+                self.assertEqual(
+                    foto.anchor._from.colOff,
+                    pixels_to_EMU((ancho_campo - foto.width) // 2),
+                )
+                self.assertEqual(
+                    foto.anchor._from.rowOff,
+                    pixels_to_EMU((alto_campo - foto.height) // 2),
+                )
+                self.assertEqual(
+                    {
+                        columna: dimension.width
+                        for columna, dimension in hoja.column_dimensions.items()
+                    },
+                    {
+                        columna: dimension.width
+                        for columna, dimension in hoja_plantilla.column_dimensions.items()
+                    },
+                )
+                self.assertEqual(
+                    {
+                        fila: dimension.height
+                        for fila, dimension in hoja.row_dimensions.items()
+                    },
+                    {
+                        fila: dimension.height
+                        for fila, dimension in hoja_plantilla.row_dimensions.items()
+                    },
+                )
+                plantilla.close()
                 libro.close()
 
                 ruta_foto = activo.foto.path
@@ -500,8 +545,9 @@ class InventarioTests(APITestCase):
             for imagen in hoja._images
             if imagen.anchor._from.col == 14
         )
-        self.assertLessEqual(foto.width, 1099)
-        self.assertLessEqual(foto.height, 320)
+        ancho_campo, alto_campo = _dimensiones_campo_foto(hoja)
+        self.assertLessEqual(foto.width, ancho_campo)
+        self.assertLessEqual(foto.height, alto_campo)
         self.assertAlmostEqual(foto.width / foto.height, 4 / 3, places=2)
         libro.close()
 
