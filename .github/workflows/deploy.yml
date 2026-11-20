@@ -19,9 +19,6 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment: production
-    defaults:
-      run:
-        working-directory: backend
 
     steps:
       - name: Checkout
@@ -50,9 +47,6 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment: production
-    defaults:
-      run:
-        working-directory: frontend
 
     steps:
       - name: Checkout

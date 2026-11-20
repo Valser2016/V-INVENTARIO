@@ -24,6 +24,8 @@ secretos de repositorio:
 
 El workflow enlaza cada proyecto usando `railway link --project` y selecciona
 el entorno `production` y el servicio correspondiente antes de desplegar.
+Sube el repositorio desde su raíz; conserva `backend` o `frontend` como
+directorio raíz de cada servicio en Railway.
 
 No es necesario guardar `DATABASE_URL`, `SECRET_KEY`, `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS` ni `CSRF_TRUSTED_ORIGINS` en GitHub. Deben configurarse como variables secretas en Railway para cada servicio.
 
