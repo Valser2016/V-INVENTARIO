@@ -14,7 +14,7 @@
 
 En GitHub, configura al menos:
 
-- `RAILWAY_TOKEN`: token personal de Railway con permisos de despliegue.
+- `RAILWAY_TOKEN`: token personal/de cuenta de Railway con acceso a los proyectos. El workflow lo entrega al CLI como `RAILWAY_API_TOKEN`.
 - `RAILWAY_PROJECT_ID_BACKEND`: ID del proyecto Railway que contiene el servicio backend.
 - `RAILWAY_PROJECT_ID_FRONTEND`: ID del proyecto Railway que contiene el servicio frontend.
 

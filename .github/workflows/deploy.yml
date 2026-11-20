@@ -34,7 +34,7 @@ jobs:
 
       - name: Deploy backend
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID_BACKEND }}
         run: |
           export PATH="$HOME/.railway/bin:$PATH"
@@ -61,7 +61,7 @@ jobs:
 
       - name: Deploy frontend
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID_FRONTEND }}
         run: |
           export PATH="$HOME/.railway/bin:$PATH"
