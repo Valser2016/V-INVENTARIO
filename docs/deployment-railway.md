@@ -10,13 +10,17 @@
 
 > Railway asigna automáticamente una URL de base de datos al servicio PostgreSQL. No se debe guardar esa URL en Git ni compartirla en el repositorio.
 
-## 2. Variables protegidas de GitHub
+## 2. Secretos de despliegue en GitHub
 
-En GitHub, configura al menos:
+En **Settings > Secrets and variables > Actions** del repositorio, crea estos
+secretos de repositorio:
 
-- `RAILWAY_TOKEN`: token personal/de cuenta de Railway con acceso a los proyectos. El workflow lo entrega al CLI como `RAILWAY_API_TOKEN`.
-- `RAILWAY_PROJECT_ID_BACKEND`: ID del proyecto Railway que contiene el servicio backend.
-- `RAILWAY_PROJECT_ID_FRONTEND`: ID del proyecto Railway que contiene el servicio frontend.
+- `RAILWAY_DEPLOY_API_TOKEN`: token de cuenta de Railway con acceso a los
+  proyectos. El workflow lo entrega al CLI como `RAILWAY_API_TOKEN`.
+- `RAILWAY_DEPLOY_PROJECT_ID_BACKEND`: ID del proyecto Railway que contiene
+  el servicio backend.
+- `RAILWAY_DEPLOY_PROJECT_ID_FRONTEND`: ID del proyecto Railway que contiene
+  el servicio frontend.
 
 El workflow enlaza cada proyecto usando `railway link --project` y selecciona
 el entorno `production` y el servicio correspondiente antes de desplegar.

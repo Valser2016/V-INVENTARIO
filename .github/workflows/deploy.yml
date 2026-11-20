@@ -34,10 +34,14 @@ jobs:
 
       - name: Deploy backend
         env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID_BACKEND }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_DEPLOY_API_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_DEPLOY_PROJECT_ID_BACKEND }}
         run: |
           export PATH="$HOME/.railway/bin:$PATH"
+          if [[ -z "$RAILWAY_API_TOKEN" || -z "$RAILWAY_PROJECT_ID" ]]; then
+            echo "::error::Set repository secrets RAILWAY_DEPLOY_API_TOKEN and RAILWAY_DEPLOY_PROJECT_ID_BACKEND."
+            exit 1
+          fi
           railway link --project "$RAILWAY_PROJECT_ID" --environment production --service backend --json
           railway up --ci --service backend
 
@@ -61,9 +65,13 @@ jobs:
 
       - name: Deploy frontend
         env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID_FRONTEND }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_DEPLOY_API_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_DEPLOY_PROJECT_ID_FRONTEND }}
         run: |
           export PATH="$HOME/.railway/bin:$PATH"
+          if [[ -z "$RAILWAY_API_TOKEN" || -z "$RAILWAY_PROJECT_ID" ]]; then
+            echo "::error::Set repository secrets RAILWAY_DEPLOY_API_TOKEN and RAILWAY_DEPLOY_PROJECT_ID_FRONTEND."
+            exit 1
+          fi
           railway link --project "$RAILWAY_PROJECT_ID" --environment production --service frontend --json
           railway up --ci --service frontend
