@@ -1080,11 +1080,11 @@ a {
 .config-row-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
 }
 
 .table-action {
-    padding: 5px 7px;
+    padding: 6px 8px;
     border: 0;
     border-radius: 5px;
     color: var(--brand-green-dark);
@@ -1095,6 +1095,102 @@ a {
 
 .table-action:hover {
     background: #e9f6e8;
+}
+
+.table-action-danger {
+    color: #a23232;
+}
+
+.table-action-danger:hover {
+    background: #fff0ef;
+}
+
+.asset-sheet-backdrop {
+    position: fixed;
+    z-index: 50;
+    inset: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 28px;
+    overflow-y: auto;
+    background: rgba(25, 35, 25, 0.55);
+}
+
+.asset-sheet {
+    width: min(920px, 100%);
+    margin: auto;
+    padding: 24px;
+}
+
+.asset-sheet-header,
+.asset-sheet-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.asset-sheet-header {
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+}
+
+.asset-sheet-header h2 {
+    margin: 6px 0 0;
+    font-size: 20px;
+}
+
+.asset-sheet-body {
+    display: grid;
+    grid-template-columns: minmax(160px, 220px) 1fr;
+    gap: 24px;
+    padding: 22px 0;
+}
+
+.asset-sheet-photo .asset-photo {
+    width: 100%;
+    height: 190px;
+}
+
+.asset-sheet-photo .asset-photo-placeholder {
+    width: 100%;
+    min-height: 120px;
+}
+
+.asset-sheet-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 20px;
+    margin: 0;
+}
+
+.asset-sheet-fields > div {
+    min-width: 0;
+    padding: 10px 0;
+    border-bottom: 1px solid #eef0ed;
+}
+
+.asset-sheet-fields dt {
+    margin-bottom: 5px;
+    color: #777;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.asset-sheet-fields dd {
+    margin: 0;
+    color: var(--ink);
+    font-size: 13px;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.asset-sheet-actions {
+    justify-content: flex-end;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
 }
 
 .status-badge.status-inactive {
@@ -2666,6 +2762,27 @@ a {
 
     .report-filters .form-group {
         width: 100%;
+    }
+
+    .asset-sheet-backdrop {
+        padding: 12px;
+    }
+
+    .asset-sheet {
+        padding: 17px;
+    }
+
+    .asset-sheet-body {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .asset-sheet-photo .asset-photo {
+        max-width: 220px;
+    }
+
+    .asset-sheet-fields {
+        grid-template-columns: 1fr;
     }
 }
 

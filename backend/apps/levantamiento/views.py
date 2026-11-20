@@ -2,7 +2,8 @@ from PIL import Image, UnidentifiedImageError
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, Q
-from rest_framework import generics, viewsets
+from django.db.models.deletion import ProtectedError
+from rest_framework import generics, status, viewsets
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -34,6 +35,7 @@ from .serializers import (
     EstadoActivoConfiguracionSerializer,
     UbicacionConfiguracionSerializer,
 )
+from .services.hoja_vida_excel import crear_hoja_vida_excel
 
 
 class TiposActivoView(APIView):
@@ -143,7 +145,7 @@ class ActivosLevantamientoView(generics.ListCreateAPIView):
     )
 
 
-class ActivoLevantamientoDetalleView(generics.RetrieveUpdateAPIView):
+class ActivoLevantamientoDetalleView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [PuedeConsultarYCrearActivos]
     serializer_class = ActivoLevantamientoSerializer
     queryset = Activo.objects.filter(activo=True).select_related(
@@ -153,7 +155,62 @@ class ActivoLevantamientoDetalleView(generics.RetrieveUpdateAPIView):
         "estado",
         "responsable",
     )
-    http_method_names = ["get", "put", "patch", "head", "options"]
+    http_method_names = ["get", "put", "patch", "delete", "head", "options"]
+
+    def destroy(self, request, *args, **kwargs):
+        activo = self.get_object()
+        if (
+            activo.solicitudes_prestamo.exists()
+            or activo.listas_herramientas_prestamo.exists()
+        ):
+            return self.respuesta_eliminacion_bloqueada()
+        foto = activo.foto
+        nombre_foto = foto.name if foto else ""
+        try:
+            activo.delete()
+        except ProtectedError:
+            return self.respuesta_eliminacion_bloqueada()
+        if nombre_foto:
+            foto.storage.delete(nombre_foto)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def respuesta_eliminacion_bloqueada(self):
+        return Response(
+            {
+                "detail": (
+                    "No se puede eliminar este activo porque tiene "
+                    "solicitudes, listas, movimientos o historial relacionado."
+                )
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+
+
+class HojaVidaActivoView(APIView):
+    permission_classes = [PuedeConsultarYCrearActivos]
+
+    def get(self, request, pk):
+        activo = get_object_or_404(
+            Activo.objects.select_related(
+                "tipo_activo",
+                "categoria",
+                "ubicacion",
+                "estado",
+                "responsable",
+            ),
+            pk=pk,
+            activo=True,
+        )
+        archivo = crear_hoja_vida_excel(activo)
+        return FileResponse(
+            archivo,
+            as_attachment=True,
+            filename=f"OYS-FO-11-{activo.codigo_interno}.xlsx",
+            content_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+        )
 
 
 class FotoActivoView(APIView):

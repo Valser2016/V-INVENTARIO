@@ -10,6 +10,7 @@ from .views import (
     ActivosLevantamientoView,
     ActivoLevantamientoDetalleView,
     FotoActivoView,
+    HojaVidaActivoView,
     ResumenActivosLevantamientoView,
     TipoActivoConfiguracionViewSet,
     CategoriaActivoConfiguracionViewSet,
@@ -88,6 +89,11 @@ urlpatterns = [
         "activos/<int:pk>/foto/",
         FotoActivoView.as_view(),
         name="levantamiento-activo-foto",
+    ),
+    path(
+        "activos/<int:pk>/hoja-vida/",
+        HojaVidaActivoView.as_view(),
+        name="levantamiento-hoja-vida-activo",
     ),
 
     path(

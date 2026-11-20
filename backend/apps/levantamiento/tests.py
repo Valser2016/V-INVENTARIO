@@ -8,7 +8,7 @@ from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from PIL import Image
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
@@ -22,6 +22,7 @@ from apps.inventario.models import (
     TipoActivo,
     Ubicacion,
 )
+from apps.movimientos.models import DetallePrestamo, Prestamo, SolicitudPrestamo
 from apps.usuarios.models import Rol
 from apps.levantamiento.services.importador_excel import validar_excel
 
@@ -380,6 +381,19 @@ class InventarioTests(APITestCase):
                 contenido_foto = b"".join(foto.streaming_content)
                 self.assertEqual(contenido_foto, imagen_bytes)
 
+                hoja_vida = self.client.get(
+                    reverse("levantamiento-hoja-vida-activo", args=[activo.pk]),
+                )
+                self.assertEqual(hoja_vida.status_code, status.HTTP_200_OK)
+                libro = load_workbook(
+                    BytesIO(b"".join(hoja_vida.streaming_content)),
+                )
+                self.assertEqual(
+                    len(libro["HOJA DE VIDA EQUIPOS"]._images),
+                    2,
+                )
+                libro.close()
+
                 ruta_foto = activo.foto.path
                 eliminacion = self.client.patch(
                     reverse("levantamiento-detalle-activo", args=[activo.pk]),
@@ -398,6 +412,124 @@ class InventarioTests(APITestCase):
                     no_autorizada.status_code,
                     status.HTTP_401_UNAUTHORIZED,
                 )
+
+    def test_descarga_hoja_de_vida_oys_fo_11_con_datos_del_activo(self):
+        activo = Activo.objects.create(
+            codigo_interno="PC-001",
+            tipo_activo=self.tipo,
+            categoria=self.categoria,
+            nombre="Equipo de prueba",
+            marca="Marca",
+            modelo="Modelo",
+            serie_codigo="SERIE-001",
+            proveedor="Proveedor",
+            vida_util="5 años",
+            ubicacion=self.ubicacion,
+            estado=self.estado,
+            cuenta_con_manual=True,
+            valor="1250000.00",
+            observaciones="Observación de prueba",
+            creado_por=self.user,
+            modificado_por=self.user,
+        )
+
+        respuesta = self.client.get(
+            reverse("levantamiento-hoja-vida-activo", args=[activo.pk]),
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_200_OK)
+        self.assertIn("OYS-FO-11-PC-001.xlsx", respuesta["Content-Disposition"])
+        contenido = b"".join(respuesta.streaming_content)
+        libro = load_workbook(BytesIO(contenido), data_only=True)
+        hoja = libro["HOJA DE VIDA EQUIPOS"]
+        self.assertEqual(hoja["F5"].value, "Equipo de prueba")
+        self.assertEqual(hoja["F6"].value, "Marca")
+        self.assertEqual(hoja["F12"].value, "Oficina Central")
+        self.assertEqual(hoja["F13"].value, "SI")
+        datos_extra = libro["DATOS COMPLEMENTARIOS"]
+        self.assertEqual(datos_extra["B2"].value, "PC-001")
+        self.assertEqual(datos_extra["B4"].value, "Portátil")
+        self.assertEqual(datos_extra["B5"].value, "Disponible")
+        libro.close()
+
+    def test_elimina_permanentemente_activo_sin_historial(self):
+        activo = Activo.objects.create(
+            codigo_interno="PC-001",
+            tipo_activo=self.tipo,
+            categoria=self.categoria,
+            nombre="Equipo para eliminar",
+            ubicacion=self.ubicacion,
+            estado=self.estado,
+            creado_por=self.user,
+            modificado_por=self.user,
+        )
+
+        respuesta = self.client.delete(
+            reverse("levantamiento-detalle-activo", args=[activo.pk]),
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Activo.objects.filter(pk=activo.pk).exists())
+
+    def test_no_elimina_activo_con_historial_de_prestamo(self):
+        activo = Activo.objects.create(
+            codigo_interno="PC-001",
+            tipo_activo=self.tipo,
+            categoria=self.categoria,
+            nombre="Equipo prestado",
+            ubicacion=self.ubicacion,
+            estado=self.estado,
+            creado_por=self.user,
+            modificado_por=self.user,
+        )
+        prestamo = Prestamo.objects.create(
+            nombre_receptor="Persona de prueba",
+            documento_receptor="123",
+            fecha_devolucion_prevista=date(2030, 1, 1),
+            creado_por=self.user,
+        )
+        DetallePrestamo.objects.create(
+            prestamo=prestamo,
+            activo=activo,
+            estado_al_prestar=self.estado,
+            ubicacion_al_prestar=self.ubicacion,
+        )
+
+        respuesta = self.client.delete(
+            reverse("levantamiento-detalle-activo", args=[activo.pk]),
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn("movimientos o historial", respuesta.data["detail"])
+        self.assertTrue(Activo.objects.filter(pk=activo.pk).exists())
+
+    def test_no_elimina_activo_incluido_en_solicitud_pendiente(self):
+        activo = Activo.objects.create(
+            codigo_interno="PC-001",
+            tipo_activo=self.tipo,
+            categoria=self.categoria,
+            nombre="Equipo solicitado",
+            ubicacion=self.ubicacion,
+            estado=self.estado,
+            creado_por=self.user,
+            modificado_por=self.user,
+        )
+        solicitud = SolicitudPrestamo.objects.create(
+            solicitante=self.user,
+            nombre_receptor="Persona solicitante",
+            documento_receptor="123",
+            fecha_devolucion_prevista=date(2030, 1, 1),
+            motivo="Uso de prueba",
+        )
+        solicitud.activos.add(activo)
+
+        respuesta = self.client.delete(
+            reverse("levantamiento-detalle-activo", args=[activo.pk]),
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn("solicitudes", respuesta.data["detail"])
+        self.assertTrue(Activo.objects.filter(pk=activo.pk).exists())
 
     def _payload_activo(self, **overrides):
         payload = {

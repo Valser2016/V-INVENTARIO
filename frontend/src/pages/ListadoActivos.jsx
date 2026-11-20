@@ -8,7 +8,7 @@ import {
     SeccionInformacion,
     SeccionObservaciones,
 } from "../components/activo/FormularioActivo";
-import FotoActivo from "../components/activo/FotoActivo";
+import FichaVidaActivo from "../components/activo/FichaVidaActivo";
 import { crearFormDataActivo } from "../utils/activoFormData";
 
 const formularioVacio = () => ({
@@ -55,6 +55,7 @@ function ListadoActivos() {
     const [cargando, setCargando] = useState(true);
     const [error, setError] = useState("");
     const [mensaje, setMensaje] = useState("");
+    const [activoVisto, setActivoVisto] = useState(null);
     const [activoEditado, setActivoEditado] = useState(null);
     const [formulario, setFormulario] = useState(formularioVacio);
     const [fotoArchivo, setFotoArchivo] = useState(null);
@@ -66,6 +67,7 @@ function ListadoActivos() {
     const [usuarios, setUsuarios] = useState([]);
     const [cargandoFormulario, setCargandoFormulario] = useState(false);
     const [guardando, setGuardando] = useState(false);
+    const [descargandoHoja, setDescargandoHoja] = useState(false);
 
     useEffect(() => {
         let cancelado = false;
@@ -129,6 +131,7 @@ function ListadoActivos() {
     }, [activoEditado, formulario.tipo_activo]);
 
     const editarActivo = async (activo) => {
+        setActivoVisto(null);
         setError("");
         setMensaje("");
         setCargandoFormulario(true);
@@ -175,6 +178,12 @@ function ListadoActivos() {
         } finally {
             setCargandoFormulario(false);
         }
+    };
+
+    const verActivo = (activo) => {
+        setError("");
+        setActivoEditado(null);
+        setActivoVisto(activo);
     };
 
     const cambiarCampo = (campo, valor) => {
@@ -250,17 +259,48 @@ function ListadoActivos() {
         }
     };
 
-    const desactivarActivo = async (activo) => {
-        if (!window.confirm(`¿Desactivar el activo ${activo.codigo_interno}?`)) {
+    const descargarHojaVida = async (activo) => {
+        setError("");
+        setDescargandoHoja(true);
+        try {
+            const response = await api.get(
+                `/levantamiento/activos/${activo.id}/hoja-vida/`,
+                { responseType: "blob" },
+            );
+            const objectUrl = URL.createObjectURL(response.data);
+            const enlace = document.createElement("a");
+            enlace.href = objectUrl;
+            enlace.download = `OYS-FO-11-${activo.codigo_interno}.xlsx`;
+            document.body.appendChild(enlace);
+            enlace.click();
+            enlace.remove();
+            window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+        } catch (requestError) {
+            console.error("Error descargando hoja de vida:", requestError);
+            const estadoHttp = requestError.response?.status;
+            setError(
+                estadoHttp
+                    ? `No fue posible descargar la hoja de vida (error ${estadoHttp}).`
+                    : errorApi(requestError),
+            );
+        } finally {
+            setDescargandoHoja(false);
+        }
+    };
+
+    const eliminarActivo = async (activo) => {
+        if (!window.confirm(
+            `¿Eliminar permanentemente el activo ${activo.codigo_interno}? Esta acción no se puede deshacer.`,
+        )) {
             return;
         }
         setError("");
         setMensaje("");
         setGuardando(true);
         try {
-            await api.patch(`/levantamiento/activos/${activo.id}/`, { activo: false });
+            await api.delete(`/levantamiento/activos/${activo.id}/`);
             const resultados = pagina?.results ?? [];
-            setMensaje(`Se desactivó el activo ${activo.codigo_interno}.`);
+            setMensaje(`Se eliminó el activo ${activo.codigo_interno}.`);
             if (resultados.length === 1 && numeroPagina > 1) {
                 setNumeroPagina((actual) => actual - 1);
             } else {
@@ -273,8 +313,11 @@ function ListadoActivos() {
             if (activoEditado?.id === activo.id) {
                 cancelarEdicion();
             }
+            if (activoVisto?.id === activo.id) {
+                setActivoVisto(null);
+            }
         } catch (requestError) {
-            console.error("Error desactivando activo:", requestError);
+            console.error("Error eliminando activo:", requestError);
             setError(errorApi(requestError));
         } finally {
             setGuardando(false);
@@ -283,6 +326,14 @@ function ListadoActivos() {
 
     return (
         <div className="page-container">
+            {activoVisto && (
+                <FichaVidaActivo
+                    activo={activoVisto}
+                    alCerrar={() => setActivoVisto(null)}
+                    alDescargar={() => descargarHojaVida(activoVisto)}
+                    descargando={descargandoHoja}
+                />
+            )}
             <header className="page-header">
                 <div>
                     <span className="eyebrow">GESTIÓN DE INVENTARIO</span>
@@ -369,61 +420,61 @@ function ListadoActivos() {
                                 <thead>
                                     <tr>
                                         <th>Código</th>
-                                        <th>Foto</th>
                                         <th>Nombre</th>
                                         <th>Tipo</th>
                                         <th>Categoría</th>
-                                        <th>Ubicación</th>
                                         <th>Estado</th>
-                                        {puedeModificar && <th>Acciones</th>}
+                                        <th>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {pagina?.results.length ? pagina.results.map((activo) => (
                                         <tr key={activo.id}>
                                             <td>{activo.codigo_interno}</td>
-                                            <td>
-                                                <FotoActivo
-                                                    url={activo.foto_url}
-                                                    alt={`Foto de ${activo.codigo_interno}`}
-                                                />
-                                            </td>
                                             <td>{activo.nombre}</td>
                                             <td>{activo.tipo_activo_nombre}</td>
                                             <td>{activo.categoria_nombre}</td>
-                                            <td>{activo.ubicacion_nombre}</td>
                                             <td>
                                                 <span className="status-badge">
                                                     <span />
                                                     {activo.estado_nombre}
                                                 </span>
                                             </td>
-                                            {puedeModificar && (
-                                                <td>
-                                                    <div className="config-row-actions">
-                                                        <button
-                                                            className="text-button"
-                                                            type="button"
-                                                            disabled={guardando || cargandoFormulario}
-                                                            onClick={() => editarActivo(activo)}
-                                                        >
-                                                            Editar
-                                                        </button>
-                                                        <button
-                                                            className="text-button"
-                                                            type="button"
-                                                            disabled={guardando}
-                                                            onClick={() => desactivarActivo(activo)}
-                                                        >
-                                                            Desactivar
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            )}
+                                            <td>
+                                                <div className="config-row-actions">
+                                                    <button
+                                                        className="table-action"
+                                                        type="button"
+                                                        onClick={() => verActivo(activo)}
+                                                    >
+                                                        Ver
+                                                    </button>
+                                                    {puedeModificar && (
+                                                        <>
+                                                            <button
+                                                                className="table-action"
+                                                                type="button"
+                                                                disabled={guardando || cargandoFormulario}
+                                                                onClick={() => editarActivo(activo)}
+                                                            >
+                                                                Editar
+                                                            </button>
+                                                            <button
+                                                                className="table-action table-action-danger"
+                                                                type="button"
+                                                                disabled={guardando}
+                                                                onClick={() => eliminarActivo(activo)}
+                                                            >
+                                                                Eliminar
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </td>
                                         </tr>
                                     )) : (
                                         <tr>
-                                            <td colSpan={puedeModificar ? 8 : 7}>
+                                            <td colSpan={6}>
                                                 No hay activos registrados.
                                             </td>
                                         </tr>

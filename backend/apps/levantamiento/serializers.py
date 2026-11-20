@@ -115,6 +115,7 @@ class ActivoLevantamientoSerializer(serializers.ModelSerializer):
         write_only=True,
     )
     foto_url = serializers.SerializerMethodField()
+    responsable_nombre = serializers.SerializerMethodField()
     tipo_activo_nombre = serializers.CharField(
         source="tipo_activo.nombre",
         read_only=True,
@@ -155,6 +156,7 @@ class ActivoLevantamientoSerializer(serializers.ModelSerializer):
             "estado",
             "estado_nombre",
             "responsable",
+            "responsable_nombre",
             "cuenta_con_manual",
             "valor",
             "observaciones",
@@ -176,6 +178,12 @@ class ActivoLevantamientoSerializer(serializers.ModelSerializer):
             f"/levantamiento/activos/{obj.pk}/foto/"
             f"?v={obj.fecha_modificacion.timestamp()}"
         )
+
+    def get_responsable_nombre(self, obj):
+        if not obj.responsable:
+            return ""
+        nombre = f"{obj.responsable.first_name} {obj.responsable.last_name}".strip()
+        return nombre or obj.responsable.username
 
     def validate_foto(self, value):
         if value and value.size > 10 * 1024 * 1024:

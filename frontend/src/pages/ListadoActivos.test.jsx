@@ -1,5 +1,5 @@
 import React from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,6 +11,7 @@ vi.mock("../services/api", () => ({
     default: {
         get: vi.fn(),
         patch: vi.fn(),
+        delete: vi.fn(),
     },
 }));
 
@@ -34,6 +35,7 @@ const activo = {
     estado: 5,
     estado_nombre: "Disponible",
     responsable: null,
+    responsable_nombre: "",
     cuenta_con_manual: false,
     valor: "1500.00",
     observaciones: "",
@@ -78,14 +80,74 @@ const prepararRespuestas = () => {
 beforeEach(() => {
     vi.mocked(api.get).mockReset();
     vi.mocked(api.patch).mockReset().mockResolvedValue({ data: {} });
+    vi.mocked(api.delete).mockReset().mockResolvedValue({ data: {} });
 });
 
 afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
 });
 
 describe("Edición de inventario", () => {
+    it("muestra solo las columnas solicitadas y abre la hoja de vida completa", async () => {
+        prepararRespuestas();
+        const user = userEvent.setup();
+        renderPage();
+
+        await screen.findByText("PC-001");
+        const encabezados = screen.getAllByRole("columnheader").map((nodo) => nodo.textContent);
+        expect(encabezados).toEqual([
+            "Código",
+            "Nombre",
+            "Tipo",
+            "Categoría",
+            "Estado",
+            "Acciones",
+        ]);
+        await user.click(await screen.findByRole("button", { name: "Ver" }));
+
+        const ficha = await screen.findByRole("dialog");
+        expect(ficha).toBeInTheDocument();
+        expect(within(ficha).getByText("Hoja de vida del activo")).toBeInTheDocument();
+        expect(within(ficha).getByText("Equipo original")).toBeInTheDocument();
+        expect(within(ficha).getByText("Marca", { selector: "dd" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Descargar OYS-FO-11" })).toBeInTheDocument();
+    });
+
+    it("descarga la hoja de vida en formato OYS-FO-11", async () => {
+        prepararRespuestas();
+        vi.mocked(api.get).mockImplementation((url) => {
+            if (url === "/levantamiento/activos/?page=1") {
+                return Promise.resolve({
+                    data: { count: 1, next: null, previous: null, results: [activo] },
+                });
+            }
+            if (url === "/levantamiento/activos/1/hoja-vida/") {
+                return Promise.resolve({ data: new Blob(["excel"]) });
+            }
+            return Promise.reject(new Error(`URL no esperada: ${url}`));
+        });
+        vi.stubGlobal("URL", {
+            createObjectURL: vi.fn(() => "blob:hoja-vida"),
+            revokeObjectURL: vi.fn(),
+        });
+        vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+        const user = userEvent.setup();
+        renderPage();
+
+        await user.click(await screen.findByRole("button", { name: "Ver" }));
+        await user.click(screen.getByRole("button", { name: "Descargar OYS-FO-11" }));
+
+        await waitFor(() => {
+            expect(api.get).toHaveBeenCalledWith(
+                "/levantamiento/activos/1/hoja-vida/",
+                { responseType: "blob" },
+            );
+        });
+        expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
+    });
+
     it("permite editar datos completos de un activo", async () => {
         prepararRespuestas();
         const actualizado = { ...activo, nombre: "Equipo actualizado" };
@@ -135,27 +197,46 @@ describe("Edición de inventario", () => {
         });
     });
 
-    it("permite desactivar un activo y oculta sus acciones a roles de solo lectura", async () => {
+    it("elimina permanentemente un activo y conserva solo Ver para roles de solo lectura", async () => {
         prepararRespuestas();
         vi.spyOn(window, "confirm").mockReturnValue(true);
         const user = userEvent.setup();
         const { unmount } = renderPage();
 
-        await user.click(await screen.findByRole("button", { name: "Desactivar" }));
+        await user.click(await screen.findByRole("button", { name: "Eliminar" }));
         await waitFor(() => {
-            expect(api.patch).toHaveBeenCalledWith(
-                "/levantamiento/activos/1/",
-                { activo: false },
-            );
+            expect(api.delete).toHaveBeenCalledWith("/levantamiento/activos/1/");
         });
         expect(await screen.findByRole("status")).toHaveTextContent(
-            "Se desactivó el activo PC-001.",
+            "Se eliminó el activo PC-001.",
         );
 
         unmount();
         renderPage({ puede_modificar_inventario: false });
         expect(await screen.findByText("Equipo original")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Ver" })).toBeInTheDocument();
         expect(screen.queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
-        expect(screen.queryByRole("button", { name: "Desactivar" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Eliminar" })).not.toBeInTheDocument();
+    });
+
+    it("muestra el motivo y conserva el activo si el servidor impide eliminarlo", async () => {
+        prepararRespuestas();
+        vi.spyOn(window, "confirm").mockReturnValue(true);
+        vi.mocked(api.delete).mockRejectedValue({
+            response: {
+                data: {
+                    detail: "No se puede eliminar este activo porque tiene solicitudes, listas, movimientos o historial relacionado.",
+                },
+            },
+        });
+        const user = userEvent.setup();
+        renderPage();
+
+        await user.click(await screen.findByRole("button", { name: "Eliminar" }));
+
+        expect(await screen.findByRole("alert")).toHaveTextContent(
+            "No se puede eliminar este activo porque tiene solicitudes, listas, movimientos o historial relacionado.",
+        );
+        expect(screen.getByText("Equipo original")).toBeInTheDocument();
     });
 });
