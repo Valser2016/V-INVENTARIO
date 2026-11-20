@@ -399,7 +399,7 @@ class InventarioTests(APITestCase):
                     for imagen in hoja._images
                     if imagen.anchor._from.col == 14
                 )
-                self.assertEqual((foto.width, foto.height), (1099, 320))
+                self.assertEqual((foto.width, foto.height), (4, 4))
                 libro.close()
 
                 ruta_foto = activo.foto.path
@@ -455,6 +455,54 @@ class InventarioTests(APITestCase):
         self.assertEqual(hoja["F12"].value, "Oficina Central")
         self.assertEqual(hoja["F13"].value, "SI")
         self.assertEqual(libro.sheetnames, ["HOJA DE VIDA EQUIPOS"])
+        libro.close()
+
+    def test_hoja_vida_redimensiona_foto_grande_sin_recortarla(self):
+        imagen_buffer = BytesIO()
+        Image.new("RGB", (1200, 900), color="green").save(
+            imagen_buffer,
+            format="PNG",
+        )
+
+        with TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                activo = Activo.objects.create(
+                    codigo_interno="PC-002",
+                    tipo_activo=self.tipo,
+                    categoria=self.categoria,
+                    nombre="Equipo con foto grande",
+                    ubicacion=self.ubicacion,
+                    estado=self.estado,
+                    creado_por=self.user,
+                    modificado_por=self.user,
+                    foto=SimpleUploadedFile(
+                        "foto-grande.png",
+                        imagen_buffer.getvalue(),
+                        content_type="image/png",
+                    ),
+                )
+
+                respuesta = self.client.get(
+                    reverse(
+                        "levantamiento-hoja-vida-activo",
+                        args=[activo.pk],
+                    ),
+                )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_200_OK)
+        libro = load_workbook(
+            BytesIO(b"".join(respuesta.streaming_content)),
+            data_only=True,
+        )
+        hoja = libro["HOJA DE VIDA EQUIPOS"]
+        foto = next(
+            imagen
+            for imagen in hoja._images
+            if imagen.anchor._from.col == 14
+        )
+        self.assertLessEqual(foto.width, 1099)
+        self.assertLessEqual(foto.height, 320)
+        self.assertAlmostEqual(foto.width / foto.height, 4 / 3, places=2)
         libro.close()
 
     def test_elimina_permanentemente_activo_sin_historial(self):

@@ -5,7 +5,7 @@ from openpyxl import load_workbook
 from openpyxl.drawing.image import Image as SpreadsheetImage
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.units import points_to_pixels
-from PIL import Image as PilImage, ImageOps
+from PIL import Image as PilImage
 
 
 PLANTILLA_HOJA_VIDA = (
@@ -54,10 +54,10 @@ def crear_hoja_vida_excel(activo):
         with activo.foto.open("rb") as archivo_foto:
             with PilImage.open(archivo_foto) as imagen_original:
                 modo = "RGBA" if "A" in imagen_original.getbands() else "RGB"
-                imagen = ImageOps.fit(
-                    imagen_original.convert(modo),
+                imagen = imagen_original.convert(modo)
+                imagen.thumbnail(
                     _dimensiones_campo_foto(hoja),
-                    method=PilImage.Resampling.LANCZOS,
+                    PilImage.Resampling.LANCZOS,
                 )
                 imagen.save(foto_buffer, format="PNG")
         foto_buffer.seek(0)
