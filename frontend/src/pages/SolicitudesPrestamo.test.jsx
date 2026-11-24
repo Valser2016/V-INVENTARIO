@@ -141,6 +141,9 @@ describe("Solicitudes de préstamo", () => {
 
         await user.click(botonNuevaSolicitud);
         expect(screen.getByLabelText("Cliente")).toBeInTheDocument();
+        expect(screen.getByRole("button", {
+            name: "Adicionar consumibles",
+        })).toBeVisible();
         await user.click(botonMisSolicitudes);
         expect(await screen.findByText("SOLICITUD #12")).toBeInTheDocument();
     });
