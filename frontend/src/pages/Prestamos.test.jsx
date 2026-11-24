@@ -80,7 +80,7 @@ afterEach(() => {
 });
 
 describe("Préstamos y devoluciones", () => {
-    it("permite registrar consumibles sin seleccionar activos del inventario", async () => {
+    it("envía una solicitud solo de consumibles sin registrar el préstamo todavía", async () => {
         prepararRespuestas();
         const user = userEvent.setup();
         renderPage();
@@ -89,21 +89,33 @@ describe("Préstamos y devoluciones", () => {
         await user.type(screen.getByLabelText("Cliente"), "Acme Industrial");
         await user.type(screen.getByLabelText("Consecutivo del servicio"), "OS-1002");
         await user.type(screen.getByLabelText("Documento"), "123456");
+        await user.type(
+            screen.getByLabelText("¿Para qué necesitas los activos o consumibles?"),
+            "Trabajo en planta",
+        );
         await user.click(screen.getByRole("button", { name: "Adicionar consumibles" }));
         await user.type(screen.getByLabelText("Nombre del consumible"), "Cinta aislante");
-        await user.clear(screen.getByLabelText("Cantidad entregada"));
-        await user.type(screen.getByLabelText("Cantidad entregada"), "5");
-        await user.click(screen.getByRole("button", { name: "Registrar préstamo" }));
+        await user.clear(screen.getByLabelText("Cantidad solicitada"));
+        await user.type(screen.getByLabelText("Cantidad solicitada"), "5");
+        await user.click(screen.getByRole("button", { name: "Enviar solicitud" }));
 
         await waitFor(() => {
             expect(api.post).toHaveBeenCalledWith(
-                "/movimientos/prestamos/",
+                "/movimientos/solicitudes-prestamo/",
                 expect.objectContaining({
+                    cliente: "Acme Industrial",
+                    consecutivo: "OS-1002",
+                    nombre_receptor: "Ana",
+                    documento_receptor: "123456",
+                    motivo: "Trabajo en planta",
                     activos: [],
                     consumibles: [{ nombre: "Cinta aislante", cantidad: "5" }],
                 }),
             );
         });
+        expect(await screen.findByRole("status")).toHaveTextContent(
+            "La solicitud quedó pendiente de checklist y aprobación.",
+        );
     });
 
     it("registra la cantidad recibida de los consumibles en la devolución", async () => {
@@ -151,7 +163,7 @@ describe("Préstamos y devoluciones", () => {
         });
     });
 
-    it("registra un préstamo con un activo seleccionado", async () => {
+    it("envía los activos como solicitud pendiente de aprobación", async () => {
         prepararRespuestas();
         const user = userEvent.setup();
         renderPage();
@@ -166,17 +178,22 @@ describe("Préstamos y devoluciones", () => {
             "OS-1001",
         );
         await user.type(screen.getByLabelText("Documento"), "123456");
+        await user.type(
+            screen.getByLabelText("¿Para qué necesitas los activos o consumibles?"),
+            "Trabajo en planta",
+        );
         await user.click(screen.getByLabelText(/PC-008 — Portátil de pruebas/));
-        await user.click(screen.getByRole("button", { name: "Registrar préstamo" }));
+        await user.click(screen.getByRole("button", { name: "Enviar solicitud" }));
 
         await waitFor(() => {
             expect(api.post).toHaveBeenCalledWith(
-                "/movimientos/prestamos/",
+                "/movimientos/solicitudes-prestamo/",
                 expect.objectContaining({
                     cliente: "Acme Industrial",
                     consecutivo: "OS-1001",
                     nombre_receptor: "Ana Colaboradora",
                     documento_receptor: "123456",
+                    motivo: "Trabajo en planta",
                     activos: [8],
                 }),
             );

@@ -12,7 +12,6 @@ const enlaces = [
         label: "Registrar activo",
         permiso: "puede_modificar_inventario",
     },
-    { to: "/movimientos", icono: "↔", label: "Préstamos", end: true, permiso: "puede_ver_movimientos" },
     {
         to: "/movimientos/solicitudes",
         icono: "▣",

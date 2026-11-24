@@ -22,6 +22,7 @@ from apps.inventario.models import (
 )
 from apps.movimientos.models import (
     ConsumiblePrestamo,
+    ConsumibleSolicitud,
     DetallePrestamo,
     ListaHerramientasPrestamo,
     Prestamo,
@@ -150,7 +151,9 @@ class PrestamoApiTests(APITestCase):
                 "formato_fecha_solicitud": hoja["M7"].number_format,
                 "formato_fecha_salida": hoja["D41"].number_format,
                 "descripcion": hoja["B10"].value,
+                "descripcion_fila_11": hoja["B11"].value,
                 "cantidad": hoja["N10"].value,
+                "cantidad_fila_11": hoja["N11"].value,
                 "recibido": hoja["O10"].value,
                 "retornado": hoja["P10"].value,
                 "estado": hoja["Q10"].value,
@@ -339,12 +342,40 @@ class PrestamoApiTests(APITestCase):
         self.assertEqual(self.activo_2.estado, self.prestado)
 
     def test_administrador_puede_solicitar_y_aprobar_su_prestamo(self):
+        payload = self.crear_payload_solicitud()
+        payload["consumibles"] = [{"nombre": "Cinta aislante", "cantidad": 5}]
         solicitud = self.client.post(
             reverse("solicitud-prestamo-list"),
-            self.crear_payload_solicitud(),
+            payload,
             format="json",
         )
         self.assertEqual(solicitud.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            [
+                (item["nombre"], item["cantidad"])
+                for item in solicitud.data["consumibles"]
+            ],
+            [("Cinta aislante", 5)],
+        )
+        self.assertEqual(
+            ConsumibleSolicitud.objects.filter(
+                solicitud_id=solicitud.data["id"],
+            ).count(),
+            1,
+        )
+
+        solicitudes_admin = self.client.get(reverse("solicitud-prestamo-list"))
+        self.assertEqual(
+            [item["id"] for item in solicitudes_admin.data],
+            [solicitud.data["id"]],
+        )
+        self.client.force_authenticate(user=self.almacenista)
+        solicitudes_almacen = self.client.get(reverse("solicitud-prestamo-list"))
+        self.assertEqual(
+            [item["id"] for item in solicitudes_almacen.data],
+            [solicitud.data["id"]],
+        )
+        self.client.force_authenticate(user=self.usuario)
 
         revision = self.revisar_solicitud(solicitud.data["id"])
         self.assertEqual(revision.status_code, status.HTTP_200_OK)
@@ -358,6 +389,48 @@ class PrestamoApiTests(APITestCase):
         self.assertEqual(aprobacion.status_code, status.HTTP_200_OK)
         self.assertEqual(aprobacion.data["estado"], SolicitudPrestamo.Estado.APROBADA)
         self.assertIsNotNone(aprobacion.data["prestamo_id"])
+        consumible = ConsumiblePrestamo.objects.get(
+            prestamo_id=aprobacion.data["prestamo_id"],
+        )
+        self.assertEqual(consumible.nombre, "Cinta aislante")
+        self.assertEqual(consumible.cantidad, 5)
+        self.assertEqual(
+            self.oys_generados[-1]["descripcion_fila_11"],
+            "Consumible: Cinta aislante",
+        )
+        self.assertEqual(self.oys_generados[-1]["cantidad_fila_11"], 5)
+
+    def test_solicitud_solo_de_consumibles_se_revisa_y_aprueba(self):
+        payload = self.crear_payload_solicitud()
+        payload["activos"] = []
+        payload["consumibles"] = [{"nombre": "Guantes de nitrilo", "cantidad": 3}]
+        solicitud = self.client.post(
+            reverse("solicitud-prestamo-list"),
+            payload,
+            format="json",
+        )
+        self.assertEqual(solicitud.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(solicitud.data["activos"], [])
+        self.assertEqual(
+            [(item["nombre"], item["cantidad"]) for item in solicitud.data["consumibles"]],
+            [("Guantes de nitrilo", 3)],
+        )
+
+        revision = self.revisar_solicitud(solicitud.data["id"])
+        self.assertEqual(revision.status_code, status.HTTP_200_OK)
+        aprobacion = self.client.post(
+            reverse("solicitud-prestamo-aprobar", args=[solicitud.data["id"]]),
+            {},
+            format="json",
+        )
+
+        self.assertEqual(aprobacion.status_code, status.HTTP_200_OK)
+        self.assertEqual(aprobacion.data["estado"], SolicitudPrestamo.Estado.APROBADA)
+        prestamo = Prestamo.objects.get(pk=aprobacion.data["prestamo_id"])
+        self.assertFalse(prestamo.detalles.exists())
+        self.assertEqual(prestamo.consumibles.get().cantidad, 3)
+        self.assertEqual(self.oys_generados[-1]["descripcion"], "Consumible: Guantes de nitrilo")
+        self.assertEqual(self.oys_generados[-1]["cantidad"], 3)
 
     def test_crea_y_registra_devolucion_de_consumibles_sin_activos_de_inventario(self):
         payload = self.crear_payload()

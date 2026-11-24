@@ -11,6 +11,7 @@ from apps.inventario.models import Activo, EstadoActivo, Ubicacion
 
 from .models import (
     ConsumiblePrestamo,
+    ConsumibleSolicitud,
     DetallePrestamo,
     ListaHerramientasPrestamo,
     Prestamo,
@@ -147,6 +148,12 @@ class ConsumiblePrestamoSerializer(serializers.ModelSerializer):
     class Meta:
         model = ConsumiblePrestamo
         fields = ["id", "nombre", "cantidad", "cantidad_recibida"]
+
+
+class ConsumibleSolicitudSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConsumibleSolicitud
+        fields = ["id", "nombre", "cantidad"]
 
 
 class PrestamoSerializer(serializers.ModelSerializer):
@@ -396,6 +403,7 @@ class CrearPrestamoSerializer(serializers.ModelSerializer):
 
 class SolicitudPrestamoSerializer(serializers.ModelSerializer):
     activos = serializers.SerializerMethodField()
+    consumibles = ConsumibleSolicitudSerializer(many=True, read_only=True)
     solicitante_nombre = serializers.SerializerMethodField()
     solicitante_usuario = serializers.CharField(
         source="solicitante.username",
@@ -421,6 +429,7 @@ class SolicitudPrestamoSerializer(serializers.ModelSerializer):
             "motivo",
             "observaciones",
             "activos",
+            "consumibles",
             "estado",
             "estado_nombre",
             "fecha_solicitud",
@@ -492,6 +501,12 @@ class CrearSolicitudPrestamoSerializer(serializers.ModelSerializer):
         many=True,
         queryset=Activo.objects.filter(activo=True),
         write_only=True,
+        required=False,
+    )
+    consumibles = ConsumiblePrestamoEntradaSerializer(
+        many=True,
+        required=False,
+        write_only=True,
     )
 
     class Meta:
@@ -505,6 +520,7 @@ class CrearSolicitudPrestamoSerializer(serializers.ModelSerializer):
             "motivo",
             "observaciones",
             "activos",
+            "consumibles",
         ]
 
     def validate_fecha_devolucion_prevista(self, value):
@@ -542,11 +558,6 @@ class CrearSolicitudPrestamoSerializer(serializers.ModelSerializer):
         return value
 
     def validate_activos(self, activos):
-        if not activos:
-            raise serializers.ValidationError(
-                "Selecciona al menos un activo para la solicitud."
-            )
-
         ids = [activo.pk for activo in activos]
         if len(ids) != len(set(ids)):
             raise serializers.ValidationError(
@@ -573,8 +584,16 @@ class CrearSolicitudPrestamoSerializer(serializers.ModelSerializer):
             )
         return activos
 
+    def validate(self, attrs):
+        if not attrs.get("activos") and not attrs.get("consumibles"):
+            raise serializers.ValidationError(
+                "Selecciona al menos un activo o agrega un consumible."
+            )
+        return attrs
+
     def create(self, validated_data):
-        activos = validated_data.pop("activos")
+        activos = validated_data.pop("activos", [])
+        consumibles = validated_data.pop("consumibles", [])
         solicitud = SolicitudPrestamo.objects.create(
             **validated_data,
             solicitante=self.context["request"].user,
@@ -583,6 +602,10 @@ class CrearSolicitudPrestamoSerializer(serializers.ModelSerializer):
         RevisionActivoSolicitud.objects.bulk_create([
             RevisionActivoSolicitud(solicitud=solicitud, activo=activo)
             for activo in activos
+        ])
+        ConsumibleSolicitud.objects.bulk_create([
+            ConsumibleSolicitud(solicitud=solicitud, **consumible)
+            for consumible in consumibles
         ])
         return solicitud
 
@@ -595,7 +618,10 @@ class RevisionActivoSolicitudDetalleSerializer(serializers.Serializer):
 
 
 class RevisarSolicitudPrestamoSerializer(serializers.Serializer):
-    detalles = RevisionActivoSolicitudDetalleSerializer(many=True)
+    detalles = RevisionActivoSolicitudDetalleSerializer(
+        many=True,
+        allow_empty=True,
+    )
 
     def validate_detalles(self, detalles):
         solicitud = self.context["solicitud"]

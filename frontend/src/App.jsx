@@ -101,7 +101,7 @@ function App() {
                 />
                 <Route
                     path="/movimientos"
-                    element={<PermissionGate permiso="puede_ver_movimientos"><Prestamos /></PermissionGate>}
+                    element={<Navigate to="/movimientos/solicitudes" replace />}
                 />
                 <Route
                     path="/movimientos/devoluciones"

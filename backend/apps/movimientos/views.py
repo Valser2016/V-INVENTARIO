@@ -110,7 +110,7 @@ class SolicitudPrestamoViewSet(viewsets.ModelViewSet):
         "resuelto_por",
         "revisado_por",
         "prestamo",
-    ).prefetch_related("activos", "revision_activos")
+    ).prefetch_related("activos", "revision_activos", "consumibles")
     serializer_class = SolicitudPrestamoSerializer
     permission_classes = [PuedeSolicitarPrestamo]
     pagination_class = None
@@ -235,9 +235,13 @@ class SolicitudPrestamoViewSet(viewsets.ModelViewSet):
                 for revision in revisiones
                 if revision.incluir_en_salida
             ]
-            if not activos_a_prestar:
+            consumibles_solicitados = list(solicitud.consumibles.all())
+            if not activos_a_prestar and not consumibles_solicitados:
                 raise serializers.ValidationError({
-                    "activos": "Debe quedar al menos un activo incluido en la salida."
+                    "activos": (
+                        "Debe quedar al menos un activo o un consumible "
+                        "incluido en la salida."
+                    )
                 })
             if any(
                 revision.incluir_en_salida
@@ -267,6 +271,13 @@ class SolicitudPrestamoViewSet(viewsets.ModelViewSet):
                         if valor
                     ),
                     "activos": activos_a_prestar,
+                    "consumibles": [
+                        {
+                            "nombre": consumible.nombre,
+                            "cantidad": consumible.cantidad,
+                        }
+                        for consumible in consumibles_solicitados
+                    ],
                 },
                 context={
                     "request": request,

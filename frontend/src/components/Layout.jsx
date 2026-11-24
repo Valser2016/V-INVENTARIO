@@ -6,7 +6,7 @@ const titulos = {
     "/": "Panel de control",
     "/activos": "Inventario",
     "/activos/nuevo": "Registrar activo",
-    "/movimientos": "Préstamos",
+    "/movimientos/solicitudes": "Solicitudes",
     "/movimientos/devoluciones": "Devoluciones",
     "/reportes": "Reportes",
     "/configuracion": "Configuración",

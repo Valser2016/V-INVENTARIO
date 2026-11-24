@@ -126,7 +126,32 @@ describe("Autenticación y navegación", () => {
             name: "Bienvenido a VALSER Activos",
         })).toBeInTheDocument();
         expect(screen.getByRole("link", { name: "Solicitudes" })).toBeInTheDocument();
+        expect(screen.queryByRole("link", { name: "Préstamos" })).not.toBeInTheDocument();
         expect(screen.getByRole("link", { name: "Inventario" })).toBeInTheDocument();
+    });
+
+    it("redirige el acceso anterior de préstamos a la página de solicitudes", async () => {
+        localStorage.setItem("access_token", "token-valido");
+        mockApi.get.mockImplementation(conPerfil((url) => {
+            if ([
+                "/movimientos/solicitudes-prestamo/",
+                "/movimientos/activos-disponibles/",
+                "/movimientos/listas-herramientas/",
+                "/movimientos/listas-herramientas/activos/",
+            ].includes(url)) {
+                return Promise.resolve({ data: [] });
+            }
+            return Promise.reject(new Error(`URL no esperada: ${url}`));
+        }));
+
+        renderApp(["/movimientos"]);
+
+        expect(await screen.findByRole("heading", {
+            name: "Solicitudes de préstamo",
+        })).toBeInTheDocument();
+        expect(screen.getByRole("link", { name: "Solicitudes" })).toBeInTheDocument();
+        expect(screen.queryByRole("link", { name: "Préstamos" })).not.toBeInTheDocument();
+        expect(mockApi.get).not.toHaveBeenCalledWith("/movimientos/prestamos/");
     });
 
     it("muestra al rol Inventario los accesos operativos sin Usuarios y permisos", async () => {

@@ -59,6 +59,7 @@ function Prestamos({ devoluciones = false }) {
         nombre_receptor: "",
         documento_receptor: "",
         fecha_devolucion_prevista: fechaMinimaPrestamo(),
+        motivo: "",
         observaciones: "",
         activos: [],
         consumibles: [],
@@ -99,28 +100,30 @@ function Prestamos({ devoluciones = false }) {
         setFormulario((actual) => ({ ...actual, [campo]: valor }));
     };
 
-    const crearPrestamo = async (event) => {
+    const crearSolicitudPrestamo = async (event) => {
         event.preventDefault();
         setGuardando(true);
         setError("");
         setMensaje("");
         try {
-            await api.post("/movimientos/prestamos/", formulario);
+            await api.post("/movimientos/solicitudes-prestamo/", formulario);
             setFormulario({
                 cliente: "",
                 consecutivo: "",
                 nombre_receptor: "",
                 documento_receptor: "",
                 fecha_devolucion_prevista: fechaMinimaPrestamo(),
+                motivo: "",
                 observaciones: "",
                 activos: [],
                 consumibles: [],
             });
-            setMensaje("El préstamo se registró correctamente.");
-            setCargando(true);
-            await cargarDatos();
+            setMensaje(
+                "La solicitud quedó pendiente de checklist y aprobación. " +
+                "El préstamo se registrará cuando sea aprobada.",
+            );
         } catch (requestError) {
-            console.error("Error registrando préstamo:", requestError);
+            console.error("Error creando solicitud de préstamo:", requestError);
             setError(errorApi(requestError));
         } finally {
             setGuardando(false);
@@ -380,7 +383,7 @@ function Prestamos({ devoluciones = false }) {
                     <p>
                         {devoluciones
                             ? "Registra el estado y la ubicación de los activos que regresan."
-                            : "Entrega activos a colaboradores y consulta sus fechas de devolución."}
+                            : "Envía solicitudes de activos y consumibles; el préstamo se registra después de la aprobación."}
                     </p>
                 </div>
             </header>
@@ -388,7 +391,7 @@ function Prestamos({ devoluciones = false }) {
             <nav className="module-tabs" aria-label="Módulos de movimientos">
                 {puedeVerMovimientos && (
                     <Link to="/movimientos" className={!devoluciones ? "active" : ""}>
-                        {administrador ? "Registrar préstamos" : "Consultar préstamos"}
+                        Solicitar préstamo
                     </Link>
                 )}
                 {(puedeVerMovimientos || puedeRegistrarDevoluciones) && (
@@ -410,7 +413,14 @@ function Prestamos({ devoluciones = false }) {
                 </div>
             )}
             {mensaje && (
-                <div className="alert alert-success" role="status">{mensaje}</div>
+                <div className="alert alert-success" role="status">
+                    <span>{mensaje}</span>{" "}
+                    {!devoluciones && (
+                        <Link to="/movimientos/solicitudes">
+                            Ver solicitudes y aprobaciones
+                        </Link>
+                    )}
+                </div>
             )}
 
             {!administrador && !puedeRegistrarDevoluciones ? (
@@ -770,10 +780,13 @@ function Prestamos({ devoluciones = false }) {
                     </section>
             ) : (
                 <div className="loan-layout">
-                    <form className="card loan-form" onSubmit={crearPrestamo}>
+                    <form className="card loan-form" onSubmit={crearSolicitudPrestamo}>
                         <div className="card-header">
-                            <h2>Registrar préstamo</h2>
-                            <p>Los activos elegidos cambiarán al estado configurado para préstamo.</p>
+                            <h2>Nueva solicitud de préstamo</h2>
+                            <p>
+                                El préstamo se registra después del checklist y la aprobación.
+                                Hasta entonces, los activos conservan su estado.
+                            </p>
                         </div>
                         <div className="form-grid">
                             <div className="form-group">
@@ -834,6 +847,18 @@ function Prestamos({ devoluciones = false }) {
                                 />
                             </div>
                             <div className="form-group">
+                                <label htmlFor="motivo-solicitud-prestamo">
+                                    ¿Para qué necesitas los activos o consumibles?
+                                </label>
+                                <textarea
+                                    id="motivo-solicitud-prestamo"
+                                    value={formulario.motivo}
+                                    onChange={(event) => cambiarCampo("motivo", event.target.value)}
+                                    required
+                                    rows="2"
+                                />
+                            </div>
+                            <div className="form-group">
                                 <label htmlFor="observaciones-prestamo">Observaciones</label>
                                 <textarea
                                     id="observaciones-prestamo"
@@ -861,7 +886,7 @@ function Prestamos({ devoluciones = false }) {
                                 <p className="form-hint">No hay activos disponibles para préstamo.</p>
                             )}
                         </fieldset>
-                        <section className="loan-consumables" aria-label="Consumibles del préstamo">
+                        <section className="loan-consumables" aria-label="Consumibles de la solicitud">
                             <div className="loan-consumables-header">
                                 <div>
                                     <h3>Consumibles</h3>
@@ -897,7 +922,7 @@ function Prestamos({ devoluciones = false }) {
                                     </div>
                                     <div className="form-group">
                                         <label htmlFor={`consumible-cantidad-${indice}`}>
-                                            Cantidad entregada
+                                            Cantidad solicitada
                                         </label>
                                         <input
                                             id={`consumible-cantidad-${indice}`}
@@ -928,13 +953,15 @@ function Prestamos({ devoluciones = false }) {
                             className="btn btn-primary"
                             type="submit"
                             disabled={guardando || (
-                                !activos.length
+                                !formulario.activos.length
                                 && !formulario.consumibles.some((consumible) =>
-                                    consumible.nombre.trim() && Number(consumible.cantidad) > 0
+                                    consumible.nombre.trim()
+                                    && Number.isInteger(Number(consumible.cantidad))
+                                    && Number(consumible.cantidad) > 0
                                 )
                             )}
                         >
-                            {guardando ? "Guardando..." : "Registrar préstamo"}
+                            {guardando ? "Enviando..." : "Enviar solicitud"}
                         </button>
                     </form>
 
