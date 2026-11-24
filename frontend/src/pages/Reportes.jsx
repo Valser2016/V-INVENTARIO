@@ -112,7 +112,12 @@ function Reportes() {
     const filas = useMemo(() => {
         if (tipo === "inventario") return datos?.resultados ?? [];
         if (tipo === "prestamos") {
-            return (datos ?? []).map((prestamo) => ({
+            const prestamos = Array.isArray(datos)
+                ? datos
+                : Array.isArray(datos?.results)
+                    ? datos.results
+                    : [];
+            return prestamos.map((prestamo) => ({
                 id: prestamo.id,
                 nombre_receptor: prestamo.nombre_receptor,
                 documento_receptor: prestamo.documento_receptor,
@@ -121,7 +126,9 @@ function Reportes() {
                 estado_prestamo: prestamo.estado,
                 total_activos: prestamo.total_activos,
                 activos_pendientes: prestamo.activos_pendientes,
-                activos: prestamo.detalles.map((detalle) => detalle.codigo_interno).join(", "),
+                activos: (Array.isArray(prestamo.detalles) ? prestamo.detalles : [])
+                    .map((detalle) => detalle.codigo_interno)
+                    .join(", "),
             }));
         }
         return datos ?? [];

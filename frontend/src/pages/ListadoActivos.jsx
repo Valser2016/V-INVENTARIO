@@ -55,12 +55,20 @@ function ListadoActivos() {
     const [cargando, setCargando] = useState(true);
     const [error, setError] = useState("");
     const [mensaje, setMensaje] = useState("");
+    const [filtros, setFiltros] = useState({
+        search: "",
+        tipo_activo: "",
+        categoria: "",
+        estado: "",
+        ubicacion: "",
+    });
     const [activoVisto, setActivoVisto] = useState(null);
     const [activoEditado, setActivoEditado] = useState(null);
     const [formulario, setFormulario] = useState(formularioVacio);
     const [fotoArchivo, setFotoArchivo] = useState(null);
     const [quitarFoto, setQuitarFoto] = useState(false);
     const [tipos, setTipos] = useState([]);
+    const [categoriasFiltro, setCategoriasFiltro] = useState([]);
     const [categorias, setCategorias] = useState([]);
     const [estados, setEstados] = useState([]);
     const [ubicaciones, setUbicaciones] = useState([]);
@@ -77,8 +85,14 @@ function ListadoActivos() {
             setError("");
 
             try {
+                const parametros = new URLSearchParams({ page: String(numeroPagina) });
+                Object.entries(filtros).forEach(([campo, valor]) => {
+                    if (valor.trim()) {
+                        parametros.set(campo, valor.trim());
+                    }
+                });
                 const response = await api.get(
-                    `/levantamiento/activos/?page=${numeroPagina}`
+                    `/levantamiento/activos/?${parametros.toString()}`
                 );
                 if (!cancelado) {
                     setPagina(response.data);
@@ -99,7 +113,47 @@ function ListadoActivos() {
         return () => {
             cancelado = true;
         };
-    }, [numeroPagina]);
+    }, [filtros, numeroPagina]);
+
+    useEffect(() => {
+        let cancelado = false;
+        const cargarFiltros = async () => {
+            try {
+                const [tiposResponse, categoriasResponse, estadosResponse, ubicacionesResponse] =
+                    await Promise.all([
+                        api.get("/levantamiento/tipos/"),
+                        api.get("/levantamiento/categorias/"),
+                        api.get("/levantamiento/estados/"),
+                        api.get("/levantamiento/ubicaciones/"),
+                    ]);
+                if (!cancelado) {
+                    setTipos(tiposResponse.data);
+                    setCategoriasFiltro(categoriasResponse.data);
+                    setEstados(estadosResponse.data);
+                    setUbicaciones(ubicacionesResponse.data);
+                }
+            } catch (requestError) {
+                console.error("Error cargando filtros de inventario:", requestError);
+                if (!cancelado) {
+                    setError("No fue posible cargar las opciones de los filtros.");
+                }
+            }
+        };
+
+        void cargarFiltros();
+        return () => {
+            cancelado = true;
+        };
+    }, []);
+
+    const cambiarFiltro = (campo, valor) => {
+        setFiltros((actuales) => ({
+            ...actuales,
+            [campo]: valor,
+            ...(campo === "tipo_activo" ? { categoria: "" } : {}),
+        }));
+        setNumeroPagina(1);
+    };
 
     useEffect(() => {
         let cancelado = false;
@@ -407,14 +461,106 @@ function ListadoActivos() {
                 </form>
             )}
 
-            <section className="card inventory-card" aria-label="Activos registrados">
-                {cargando ? (
+            <section
+                className="card inventory-card"
+                aria-label="Activos registrados"
+                aria-busy={cargando}
+            >
+                <>
+                    <div className="inventory-filters" aria-label="Filtros de inventario">
+                        <div className="form-group">
+                            <label htmlFor="buscar-activos">Buscar activos</label>
+                            <input
+                                id="buscar-activos"
+                                type="search"
+                                value={filtros.search}
+                                onChange={(event) => cambiarFiltro("search", event.target.value)}
+                                placeholder="Código, nombre, tipo, categoría, estado o ubicación..."
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="filtro-tipo-activo">Tipo</label>
+                            <select
+                                id="filtro-tipo-activo"
+                                value={filtros.tipo_activo}
+                                onChange={(event) => cambiarFiltro(
+                                    "tipo_activo",
+                                    event.target.value,
+                                )}
+                            >
+                                <option value="">Todos los tipos</option>
+                                {tipos.map((tipo) => (
+                                    <option key={tipo.id} value={tipo.id}>{tipo.nombre}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="filtro-categoria">Categoría</label>
+                            <select
+                                id="filtro-categoria"
+                                value={filtros.categoria}
+                                onChange={(event) => cambiarFiltro(
+                                    "categoria",
+                                    event.target.value,
+                                )}
+                            >
+                                <option value="">Todas las categorías</option>
+                                {categoriasFiltro
+                                    .filter((categoria) =>
+                                        !filtros.tipo_activo
+                                        || String(categoria.tipo_activo) === filtros.tipo_activo
+                                        || String(categoria.tipo_activo_id) === filtros.tipo_activo
+                                    )
+                                    .map((categoria) => (
+                                        <option key={categoria.id} value={categoria.id}>
+                                            {categoria.nombre}
+                                        </option>
+                                    ))}
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="filtro-estado">Estado</label>
+                            <select
+                                id="filtro-estado"
+                                value={filtros.estado}
+                                onChange={(event) => cambiarFiltro(
+                                    "estado",
+                                    event.target.value,
+                                )}
+                            >
+                                <option value="">Todos los estados</option>
+                                {estados.map((estado) => (
+                                    <option key={estado.id} value={estado.id}>
+                                        {estado.nombre}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="filtro-ubicacion">Ubicación</label>
+                            <select
+                                id="filtro-ubicacion"
+                                value={filtros.ubicacion}
+                                onChange={(event) => cambiarFiltro(
+                                    "ubicacion",
+                                    event.target.value,
+                                )}
+                            >
+                                <option value="">Todas las ubicaciones</option>
+                                {ubicaciones.map((ubicacion) => (
+                                    <option key={ubicacion.id} value={ubicacion.id}>
+                                        {ubicacion.nombre}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    {cargando && (
                     <div className="table-loading" role="status">
                         <span className="loading-spinner" />
                         <span>Cargando activos...</span>
                     </div>
-                ) : (
-                    <>
+                    )}
                         <div className="table-responsive">
                             <table>
                                 <thead>
@@ -475,7 +621,9 @@ function ListadoActivos() {
                                     )) : (
                                         <tr>
                                             <td colSpan={6}>
-                                                No hay activos registrados.
+                                                {Object.values(filtros).some(Boolean)
+                                                    ? "No se encontraron activos con esos filtros."
+                                                    : "No hay activos registrados."}
                                             </td>
                                         </tr>
                                     )}
@@ -506,8 +654,7 @@ function ListadoActivos() {
                                 Siguiente
                             </button>
                         </nav>
-                    </>
-                )}
+                </>
             </section>
         </div>
     );

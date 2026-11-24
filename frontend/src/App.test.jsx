@@ -166,7 +166,7 @@ describe("Autenticación y navegación", () => {
         expect(screen.queryByRole("link", { name: "Usuarios y permisos" })).not.toBeInTheDocument();
     });
 
-    it("dirige a Almacén al checklist sin habilitar solicitudes de préstamo", async () => {
+    it("dirige a Almacén al checklist y no habilita nuevas solicitudes de préstamo", async () => {
         localStorage.setItem("access_token", "token-valido");
         const user = userEvent.setup();
         mockApi.get.mockImplementation((url) => {
@@ -198,10 +198,10 @@ describe("Autenticación y navegación", () => {
             name: "Solicitudes de préstamo",
         })).toBeInTheDocument();
         await user.click(screen.getByRole("button", {
-            name: "Solicitudes para revisar",
+            name: "Solicitudes por aprobar",
         }));
         expect(screen.getByRole("heading", {
-            name: "Solicitudes para revisar",
+            name: "Solicitudes por aprobar",
         })).toBeInTheDocument();
         expect(screen.queryByRole("button", {
             name: "Enviar solicitud",

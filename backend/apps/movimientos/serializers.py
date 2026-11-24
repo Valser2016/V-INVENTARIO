@@ -10,6 +10,7 @@ from apps.inventario.estados import (
 from apps.inventario.models import Activo, EstadoActivo, Ubicacion
 
 from .models import (
+    ConsumiblePrestamo,
     DetallePrestamo,
     ListaHerramientasPrestamo,
     Prestamo,
@@ -142,11 +143,20 @@ class DetallePrestamoSerializer(serializers.ModelSerializer):
         return str(obj.devolucion_registrada_por)
 
 
+class ConsumiblePrestamoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConsumiblePrestamo
+        fields = ["id", "nombre", "cantidad", "cantidad_recibida"]
+
+
 class PrestamoSerializer(serializers.ModelSerializer):
     detalles = DetallePrestamoSerializer(many=True, read_only=True)
+    consumibles = ConsumiblePrestamoSerializer(many=True, read_only=True)
     estado = serializers.SerializerMethodField()
     total_activos = serializers.SerializerMethodField()
     activos_pendientes = serializers.SerializerMethodField()
+    total_herramientas = serializers.SerializerMethodField()
+    items_pendientes = serializers.SerializerMethodField()
     formato_retorno_disponible = serializers.SerializerMethodField()
 
     class Meta:
@@ -163,15 +173,24 @@ class PrestamoSerializer(serializers.ModelSerializer):
             "estado",
             "total_activos",
             "activos_pendientes",
+            "total_herramientas",
+            "items_pendientes",
             "formato_retorno_disponible",
             "detalles",
+            "consumibles",
         ]
 
     def get_estado(self, obj):
         detalles = list(obj.detalles.all())
-        devueltos = sum(detalle.fecha_devolucion is not None for detalle in detalles)
+        consumibles = list(obj.consumibles.all())
+        total_items = len(detalles) + len(consumibles)
+        pendientes = sum(detalle.fecha_devolucion is None for detalle in detalles)
+        pendientes += sum(
+            consumible.cantidad_recibida is None for consumible in consumibles
+        )
+        devueltos = total_items - pendientes
 
-        if detalles and devueltos == len(detalles):
+        if total_items and not pendientes:
             return "Devuelto"
         if obj.fecha_devolucion_prevista < timezone.localdate():
             return "Vencido"
@@ -188,9 +207,28 @@ class PrestamoSerializer(serializers.ModelSerializer):
             for detalle in obj.detalles.all()
         )
 
+    def get_total_herramientas(self, obj):
+        return obj.detalles.count() + obj.consumibles.count()
+
+    def get_items_pendientes(self, obj):
+        return self.get_activos_pendientes(obj) + sum(
+            consumible.cantidad_recibida is None
+            for consumible in obj.consumibles.all()
+        )
+
     def get_formato_retorno_disponible(self, obj):
         solicitud = getattr(obj, "solicitud", None)
         return bool(solicitud and solicitud.formato_retorno_pdf)
+
+
+class ConsumiblePrestamoEntradaSerializer(serializers.Serializer):
+    nombre = serializers.CharField(max_length=200, trim_whitespace=True)
+    cantidad = serializers.IntegerField(min_value=1)
+
+    def validate_nombre(self, value):
+        if not value:
+            raise serializers.ValidationError("Indica el nombre del consumible.")
+        return value
 
 
 def _validar_fecha_devolucion_futura(value):
@@ -216,6 +254,12 @@ class CrearPrestamoSerializer(serializers.ModelSerializer):
         many=True,
         queryset=Activo.objects.filter(activo=True),
         write_only=True,
+        required=False,
+    )
+    consumibles = ConsumiblePrestamoEntradaSerializer(
+        many=True,
+        required=False,
+        write_only=True,
     )
 
     class Meta:
@@ -228,6 +272,7 @@ class CrearPrestamoSerializer(serializers.ModelSerializer):
             "fecha_devolucion_prevista",
             "observaciones",
             "activos",
+            "consumibles",
         ]
 
     def validate_fecha_devolucion_prevista(self, value):
@@ -262,11 +307,6 @@ class CrearPrestamoSerializer(serializers.ModelSerializer):
         return value
 
     def validate_activos(self, activos):
-        if not activos:
-            raise serializers.ValidationError(
-                "Selecciona al menos un activo para el préstamo."
-            )
-
         ids = [activo.pk for activo in activos]
         if len(ids) != len(set(ids)):
             raise serializers.ValidationError(
@@ -274,49 +314,63 @@ class CrearPrestamoSerializer(serializers.ModelSerializer):
             )
         return activos
 
+    def validate(self, attrs):
+        if not attrs.get("activos") and not attrs.get("consumibles"):
+            raise serializers.ValidationError(
+                "Selecciona al menos un activo o agrega un consumible."
+            )
+        return attrs
+
     @transaction.atomic
     def create(self, validated_data):
-        activos_solicitados = validated_data.pop("activos")
+        activos_solicitados = validated_data.pop("activos", [])
+        consumibles = validated_data.pop("consumibles", [])
         ids = [activo.pk for activo in activos_solicitados]
-        activos = list(
-            Activo.objects.select_for_update()
-            .filter(pk__in=ids, activo=True)
-            .select_related("estado", "ubicacion")
-            .order_by("pk")
+        activos = (
+            list(
+                Activo.objects.select_for_update()
+                .filter(pk__in=ids, activo=True)
+                .select_related("estado", "ubicacion")
+                .order_by("pk")
+            )
+            if ids
+            else []
         )
         if len(activos) != len(ids):
             raise serializers.ValidationError({
                 "activos": "Uno o más activos ya no están disponibles."
             })
 
-        estado_prestado = obtener_estado_prestado()
-        if not estado_prestado:
-            raise serializers.ValidationError({
-                "activos": (
-                    "Configura un estado activo llamado 'En servicio' o 'Prestado' "
-                    "antes de registrar préstamos."
-                )
-            })
-
-        for activo in activos:
-            if (
-                not activo.estado.permite_prestamo
-                or es_estado_prestado(activo.estado.nombre)
-            ):
+        estado_prestado = None
+        if activos:
+            estado_prestado = obtener_estado_prestado()
+            if not estado_prestado:
                 raise serializers.ValidationError({
                     "activos": (
-                        f'El activo {activo.codigo_interno} no se puede prestar '
-                        "porque su estado actual no lo permite."
+                        "Configura un estado activo llamado 'En servicio' o 'Prestado' "
+                        "antes de registrar préstamos."
                     )
                 })
 
-        if DetallePrestamo.objects.filter(
-            activo_id__in=ids,
-            fecha_devolucion__isnull=True,
-        ).exists():
-            raise serializers.ValidationError({
-                "activos": "Uno o más activos ya tienen un préstamo pendiente."
-            })
+            for activo in activos:
+                if (
+                    not activo.estado.permite_prestamo
+                    or es_estado_prestado(activo.estado.nombre)
+                ):
+                    raise serializers.ValidationError({
+                        "activos": (
+                            f'El activo {activo.codigo_interno} no se puede prestar '
+                            "porque su estado actual no lo permite."
+                        )
+                    })
+
+            if DetallePrestamo.objects.filter(
+                activo_id__in=ids,
+                fecha_devolucion__isnull=True,
+            ).exists():
+                raise serializers.ValidationError({
+                    "activos": "Uno o más activos ya tienen un préstamo pendiente."
+                })
 
         prestamo = Prestamo.objects.create(
             **validated_data,
@@ -333,6 +387,10 @@ class CrearPrestamoSerializer(serializers.ModelSerializer):
             activo.modificado_por = self.context["request"].user
             activo.save(update_fields=["estado", "modificado_por", "fecha_modificacion"])
 
+        ConsumiblePrestamo.objects.bulk_create([
+            ConsumiblePrestamo(prestamo=prestamo, **consumible)
+            for consumible in consumibles
+        ])
         return prestamo
 
 
@@ -573,18 +631,32 @@ class DevolucionDetalleSerializer(serializers.Serializer):
     observacion = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
 
 
+class DevolucionConsumibleSerializer(serializers.Serializer):
+    consumible_id = serializers.IntegerField(min_value=1)
+    cantidad_recibida = serializers.IntegerField(min_value=0)
+
+
 class RegistrarDevolucionSerializer(serializers.Serializer):
-    detalles = DevolucionDetalleSerializer(many=True)
+    detalles = DevolucionDetalleSerializer(many=True, required=False)
+    consumibles = DevolucionConsumibleSerializer(many=True, required=False)
 
-    def validate_detalles(self, detalles):
-        if not detalles:
+    def validate(self, attrs):
+        detalles = attrs.get("detalles", [])
+        consumibles = attrs.get("consumibles", [])
+        if not detalles and not consumibles:
             raise serializers.ValidationError(
-                "Selecciona al menos un activo para registrar la devolución."
+                "Selecciona al menos un activo o consumible para registrar la devolución."
             )
-
         ids = [detalle["detalle_id"] for detalle in detalles]
         if len(ids) != len(set(ids)):
-            raise serializers.ValidationError(
-                "No puedes seleccionar dos veces el mismo activo."
-            )
-        return detalles
+            raise serializers.ValidationError({
+                "detalles": "No puedes seleccionar dos veces el mismo activo."
+            })
+        ids_consumibles = [
+            consumible["consumible_id"] for consumible in consumibles
+        ]
+        if len(ids_consumibles) != len(set(ids_consumibles)):
+            raise serializers.ValidationError({
+                "consumibles": "No puedes seleccionar dos veces el mismo consumible."
+            })
+        return attrs

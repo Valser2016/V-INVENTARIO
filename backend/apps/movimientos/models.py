@@ -241,3 +241,21 @@ class DetallePrestamo(models.Model):
 
     def __str__(self):
         return f"{self.prestamo_id} - {self.activo.codigo_interno}"
+
+
+class ConsumiblePrestamo(models.Model):
+    prestamo = models.ForeignKey(
+        Prestamo,
+        on_delete=models.CASCADE,
+        related_name="consumibles",
+    )
+    nombre = models.CharField(max_length=200)
+    cantidad = models.PositiveIntegerField()
+    cantidad_recibida = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = "consumibles_prestamo"
+        ordering = ["pk"]
+
+    def __str__(self):
+        return f"{self.prestamo_id} - {self.nombre}"

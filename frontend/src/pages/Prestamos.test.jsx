@@ -80,6 +80,77 @@ afterEach(() => {
 });
 
 describe("Préstamos y devoluciones", () => {
+    it("permite registrar consumibles sin seleccionar activos del inventario", async () => {
+        prepararRespuestas();
+        const user = userEvent.setup();
+        renderPage();
+
+        await user.type(await screen.findByLabelText("Nombre del colaborador"), "Ana");
+        await user.type(screen.getByLabelText("Cliente"), "Acme Industrial");
+        await user.type(screen.getByLabelText("Consecutivo del servicio"), "OS-1002");
+        await user.type(screen.getByLabelText("Documento"), "123456");
+        await user.click(screen.getByRole("button", { name: "Adicionar consumibles" }));
+        await user.type(screen.getByLabelText("Nombre del consumible"), "Cinta aislante");
+        await user.clear(screen.getByLabelText("Cantidad entregada"));
+        await user.type(screen.getByLabelText("Cantidad entregada"), "5");
+        await user.click(screen.getByRole("button", { name: "Registrar préstamo" }));
+
+        await waitFor(() => {
+            expect(api.post).toHaveBeenCalledWith(
+                "/movimientos/prestamos/",
+                expect.objectContaining({
+                    activos: [],
+                    consumibles: [{ nombre: "Cinta aislante", cantidad: "5" }],
+                }),
+            );
+        });
+    });
+
+    it("registra la cantidad recibida de los consumibles en la devolución", async () => {
+        prepararRespuestas([{
+            id: 20,
+            nombre_receptor: "Ana Colaboradora",
+            estado: "Vigente",
+            total_activos: 0,
+            activos_pendientes: 0,
+            total_herramientas: 1,
+            items_pendientes: 1,
+            detalles: [],
+            consumibles: [{
+                id: 45,
+                nombre: "Cinta aislante",
+                cantidad: 5,
+                cantidad_recibida: null,
+            }],
+        }]);
+        const user = userEvent.setup();
+        renderPage({ devoluciones: true });
+
+        await user.type(
+            await screen.findByLabelText("Cantidad recibida Cinta aislante"),
+            "3",
+        );
+        await user.click(screen.getByRole("button", { name: "Revisar devolución" }));
+        expect(await screen.findByText("Revisar devolución")).toBeInTheDocument();
+        expect(screen.getByText("Cinta aislante")).toBeInTheDocument();
+        await user.click(screen.getByRole("button", {
+            name: "Confirmar y registrar devolución",
+        }));
+
+        await waitFor(() => {
+            expect(api.post).toHaveBeenCalledWith(
+                "/movimientos/prestamos/20/devolver/",
+                {
+                    detalles: [],
+                    consumibles: [{
+                        consumible_id: 45,
+                        cantidad_recibida: 3,
+                    }],
+                },
+            );
+        });
+    });
+
     it("registra un préstamo con un activo seleccionado", async () => {
         prepararRespuestas();
         const user = userEvent.setup();

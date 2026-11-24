@@ -144,6 +144,31 @@ class ActivosLevantamientoView(generics.ListCreateAPIView):
         "responsable",
     )
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        filtros = {
+            "tipo_activo": "tipo_activo_id",
+            "categoria": "categoria_id",
+            "estado": "estado_id",
+            "ubicacion": "ubicacion_id",
+        }
+        for parametro, campo in filtros.items():
+            valor = self.request.query_params.get(parametro)
+            if valor:
+                queryset = queryset.filter(**{campo: valor})
+
+        busqueda = self.request.query_params.get("search", "").strip()
+        if busqueda:
+            queryset = queryset.filter(
+                Q(codigo_interno__icontains=busqueda)
+                | Q(nombre__icontains=busqueda)
+                | Q(tipo_activo__nombre__icontains=busqueda)
+                | Q(categoria__nombre__icontains=busqueda)
+                | Q(estado__nombre__icontains=busqueda)
+                | Q(ubicacion__nombre__icontains=busqueda)
+            )
+        return queryset
+
 
 class ActivoLevantamientoDetalleView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [PuedeConsultarYCrearActivos]

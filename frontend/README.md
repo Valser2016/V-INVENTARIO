@@ -5,7 +5,7 @@ Está construida con React, Vite y React Router; las solicitudes HTTP usan Axios
 
 ## Requisitos
 
-- Node.js 20 o superior.
+- Node.js 24 o superior.
 - El backend Django disponible en una URL accesible.
 
 ## Desarrollo local

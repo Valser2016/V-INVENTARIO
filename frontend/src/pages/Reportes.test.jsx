@@ -72,6 +72,34 @@ describe("Reportes", () => {
         });
     });
 
+    it("muestra préstamos cuando la respuesta está paginada", async () => {
+        vi.mocked(api.get).mockImplementation((url) => Promise.resolve({
+            data: url === "/reportes/prestamos/" ? {
+                count: 1,
+                next: null,
+                previous: null,
+                results: [{
+                    id: 12,
+                    nombre_receptor: "Ana Pérez",
+                    documento_receptor: "12345",
+                    fecha_prestamo: "2026-11-20",
+                    fecha_devolucion_prevista: "2026-11-30",
+                    estado: "Vigente",
+                    total_activos: 1,
+                    activos_pendientes: 1,
+                    detalles: [{ codigo_interno: "PC-001" }],
+                }],
+            } : [],
+        }));
+        const user = userEvent.setup();
+        render(<Reportes />);
+
+        await user.click(await screen.findByRole("button", { name: "Préstamos" }));
+
+        expect(await screen.findByText("Ana Pérez")).toBeInTheDocument();
+        expect(screen.getByText("PC-001")).toBeInTheDocument();
+    });
+
     it("solicita y descarga el reporte en Excel", async () => {
         vi.stubGlobal("URL", {
             createObjectURL: vi.fn(() => "blob:reporte"),

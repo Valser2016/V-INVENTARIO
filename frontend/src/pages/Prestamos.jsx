@@ -25,6 +25,17 @@ const errorApi = (error) => {
         .join(" ");
 };
 
+const listaHerramientasPrestamo = (prestamo) => [
+    ...(prestamo.detalles ?? []).map(
+        (detalle) => `${detalle.codigo_interno} — ${detalle.nombre_activo}`,
+    ),
+    ...(prestamo.consumibles ?? []).map(
+        (consumible) => consumible.cantidad_recibida === null
+            ? `${consumible.nombre} (${consumible.cantidad})`
+            : `${consumible.nombre} (${consumible.cantidad}; recibidas: ${consumible.cantidad_recibida})`,
+    ),
+].join(" · ");
+
 function Prestamos({ devoluciones = false }) {
     const { perfil } = useSession();
     const administrador = Boolean(perfil?.es_administrador);
@@ -50,9 +61,12 @@ function Prestamos({ devoluciones = false }) {
         fecha_devolucion_prevista: fechaMinimaPrestamo(),
         observaciones: "",
         activos: [],
+        consumibles: [],
     });
     const [devolucionesSeleccionadas, setDevolucionesSeleccionadas] = useState({});
     const [devolucionesEnRevision, setDevolucionesEnRevision] = useState({});
+    const [cantidadesConsumiblesDevolucion, setCantidadesConsumiblesDevolucion] = useState({});
+    const [consumiblesEnRevision, setConsumiblesEnRevision] = useState({});
 
     const cargarDatos = useCallback(async () => {
         try {
@@ -100,6 +114,7 @@ function Prestamos({ devoluciones = false }) {
                 fecha_devolucion_prevista: fechaMinimaPrestamo(),
                 observaciones: "",
                 activos: [],
+                consumibles: [],
             });
             setMensaje("El préstamo se registró correctamente.");
             setCargando(true);
@@ -144,6 +159,31 @@ function Prestamos({ devoluciones = false }) {
         );
     };
 
+    const agregarConsumible = () => {
+        cambiarCampo("consumibles", [
+            ...formulario.consumibles,
+            { nombre: "", cantidad: "1" },
+        ]);
+    };
+
+    const cambiarConsumible = (indice, campo, valor) => {
+        cambiarCampo(
+            "consumibles",
+            formulario.consumibles.map((consumible, actual) =>
+                actual === indice
+                    ? { ...consumible, [campo]: valor }
+                    : consumible
+            ),
+        );
+    };
+
+    const quitarConsumible = (indice) => {
+        cambiarCampo(
+            "consumibles",
+            formulario.consumibles.filter((_, actual) => actual !== indice),
+        );
+    };
+
     const cambiarDatoDevolucion = (detalleId, campo, valor) => {
         setDevolucionesSeleccionadas((actual) => ({
             ...actual,
@@ -172,9 +212,25 @@ function Prestamos({ devoluciones = false }) {
                     observacion: datos.observacion ?? "",
                 };
             });
+        const consumibles = (prestamo.consumibles ?? [])
+            .filter((consumible) => consumible.cantidad_recibida === null)
+            .map((consumible) => ({
+                consumible_id: consumible.id,
+                cantidad_recibida: cantidadesConsumiblesDevolucion[consumible.id],
+            }));
 
-        if (!detalles.length) {
-            setError("Selecciona al menos un activo para registrar la devolución.");
+        if (consumibles.some(({ cantidad_recibida }) =>
+            cantidad_recibida === undefined || cantidad_recibida === "",
+        )) {
+            setError("Indica la cantidad recibida de cada consumible pendiente.");
+            return;
+        }
+        consumibles.forEach((consumible) => {
+            consumible.cantidad_recibida = Number(consumible.cantidad_recibida);
+        });
+
+        if (!detalles.length && !consumibles.length) {
+            setError("Selecciona al menos un activo o consumible para registrar la devolución.");
             return;
         }
 
@@ -183,10 +239,19 @@ function Prestamos({ devoluciones = false }) {
             ...actuales,
             [prestamo.id]: detalles,
         }));
+        setConsumiblesEnRevision((actuales) => ({
+            ...actuales,
+            [prestamo.id]: consumibles,
+        }));
     };
 
     const cancelarRevisionDevolucion = (prestamoId) => {
         setDevolucionesEnRevision((actuales) => {
+            const nuevas = { ...actuales };
+            delete nuevas[prestamoId];
+            return nuevas;
+        });
+        setConsumiblesEnRevision((actuales) => {
             const nuevas = { ...actuales };
             delete nuevas[prestamoId];
             return nuevas;
@@ -223,7 +288,8 @@ function Prestamos({ devoluciones = false }) {
 
     const confirmarDevolucion = async (prestamo) => {
         const detalles = devolucionesEnRevision[prestamo.id];
-        if (!detalles?.length) {
+        const consumibles = consumiblesEnRevision[prestamo.id] ?? [];
+        if (!detalles?.length && !consumibles.length) {
             setError("Revisa los activos antes de confirmar la devolución.");
             return;
         }
@@ -232,15 +298,28 @@ function Prestamos({ devoluciones = false }) {
         setError("");
         setMensaje("");
         try {
+            const datosDevolucion = { detalles };
+            if (consumibles.length) {
+                datosDevolucion.consumibles = consumibles;
+            }
             const respuesta = await api.post(
                 `/movimientos/prestamos/${prestamo.id}/devolver/`,
-                { detalles },
+                datosDevolucion,
             );
             setDevolucionesSeleccionadas((actuales) => {
                 const nuevas = { ...actuales };
                 detalles.forEach(({ detalle_id }) => {
                     delete nuevas[detalle_id];
                 });
+                return nuevas;
+            });
+            setCantidadesConsumiblesDevolucion((actuales) => {
+                const nuevas = { ...actuales };
+                (consumiblesEnRevision[prestamo.id] ?? []).forEach(
+                    ({ consumible_id }) => {
+                        delete nuevas[consumible_id];
+                    },
+                );
                 return nuevas;
             });
             cancelarRevisionDevolucion(prestamo.id);
@@ -290,7 +369,7 @@ function Prestamos({ devoluciones = false }) {
         (estado) => estado.nombre.toLocaleLowerCase() === "disponible",
     );
     const prestamosPendientes = prestamos.filter(
-        (prestamo) => prestamo.activos_pendientes > 0,
+        (prestamo) => (prestamo.items_pendientes ?? prestamo.activos_pendientes) > 0,
     );
     return (
         <div className="page-container">
@@ -352,9 +431,13 @@ function Prestamos({ devoluciones = false }) {
                                     <div>
                                         <strong>{prestamo.nombre_receptor}</strong>
                                         <span>
-                                            {prestamo.total_activos} activo(s) · Vence{" "}
+                                            {prestamo.total_herramientas ?? prestamo.total_activos}
+                                            {" "}herramienta(s) · Vence{" "}
                                             {prestamo.fecha_devolucion_prevista}
                                         </span>
+                                        {listaHerramientasPrestamo(prestamo) && (
+                                            <span>{listaHerramientasPrestamo(prestamo)}</span>
+                                        )}
                                     </div>
                                     <span className={`loan-status loan-status-${prestamo.estado.toLocaleLowerCase()}`}>
                                         {prestamo.estado}
@@ -389,7 +472,7 @@ function Prestamos({ devoluciones = false }) {
                                     </p>
                                 </div>
                                 <span className="record-count">
-                                    {prestamo.activos_pendientes} pendiente(s)
+                                    {prestamo.items_pendientes ?? prestamo.activos_pendientes} pendiente(s)
                                 </span>
                             </header>
                             {devolucionesEnRevision[prestamo.id] ? (
@@ -441,6 +524,33 @@ function Prestamos({ devoluciones = false }) {
                                             </tbody>
                                         </table>
                                     </div>
+                                    {consumiblesEnRevision[prestamo.id]?.length > 0 && (
+                                        <div className="asset-review-scroll">
+                                            <table className="asset-review-table return-checklist-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th scope="col">Consumible</th>
+                                                        <th scope="col">Cantidad entregada</th>
+                                                        <th scope="col">Cantidad recibida</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {consumiblesEnRevision[prestamo.id].map((item) => {
+                                                        const consumible = prestamo.consumibles.find(
+                                                            (actual) => actual.id === item.consumible_id,
+                                                        );
+                                                        return (
+                                                            <tr key={item.consumible_id}>
+                                                                <th scope="row">{consumible.nombre}</th>
+                                                                <td>{consumible.cantidad}</td>
+                                                                <td>{item.cantidad_recibida}</td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
                                     <p className="request-review-hint">
                                         Confirma que la condición y los datos de recepción sean correctos.
                                     </p>
@@ -591,6 +701,56 @@ function Prestamos({ devoluciones = false }) {
                                                 </tbody>
                                             </table>
                                         </div>
+                                        {(prestamo.consumibles ?? []).some(
+                                            (consumible) => consumible.cantidad_recibida === null,
+                                        ) && (
+                                            <div className="asset-review-scroll">
+                                                <table className="asset-review-table return-checklist-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th scope="col">Consumible</th>
+                                                            <th scope="col">Cantidad entregada</th>
+                                                            <th scope="col">Cantidad recibida</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {prestamo.consumibles
+                                                            .filter((consumible) =>
+                                                                consumible.cantidad_recibida === null,
+                                                            )
+                                                            .map((consumible) => (
+                                                                <tr key={consumible.id}>
+                                                                    <th scope="row">{consumible.nombre}</th>
+                                                                    <td>{consumible.cantidad}</td>
+                                                                    <td>
+                                                                        <input
+                                                                            type="number"
+                                                                            min="0"
+                                                                            max={consumible.cantidad}
+                                                                            required
+                                                                            aria-label={`Cantidad recibida ${consumible.nombre}`}
+                                                                            value={
+                                                                                cantidadesConsumiblesDevolucion[
+                                                                                    consumible.id
+                                                                                ] ?? ""
+                                                                            }
+                                                                            onChange={(event) =>
+                                                                                setCantidadesConsumiblesDevolucion(
+                                                                                    (actuales) => ({
+                                                                                        ...actuales,
+                                                                                        [consumible.id]:
+                                                                                            event.target.value,
+                                                                                    }),
+                                                                                )
+                                                                            }
+                                                                        />
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
                                         <p className="request-review-hint">
                                             Todos los activos están seleccionados y en estado Bueno. Desmarca los que no llegaron o cambia la condición si tienen novedades.
                                         </p>
@@ -701,10 +861,78 @@ function Prestamos({ devoluciones = false }) {
                                 <p className="form-hint">No hay activos disponibles para préstamo.</p>
                             )}
                         </fieldset>
+                        <section className="loan-consumables" aria-label="Consumibles del préstamo">
+                            <div className="loan-consumables-header">
+                                <div>
+                                    <h3>Consumibles</h3>
+                                    <p className="form-hint">
+                                        Agrega elementos que no están registrados en el inventario.
+                                    </p>
+                                </div>
+                                <button
+                                    className="btn btn-secondary"
+                                    type="button"
+                                    onClick={agregarConsumible}
+                                >
+                                    Adicionar consumibles
+                                </button>
+                            </div>
+                            {formulario.consumibles.map((consumible, indice) => (
+                                <div className="loan-consumable-row" key={`consumible-${indice}`}>
+                                    <div className="form-group">
+                                        <label htmlFor={`consumible-nombre-${indice}`}>
+                                            Nombre del consumible
+                                        </label>
+                                        <input
+                                            id={`consumible-nombre-${indice}`}
+                                            value={consumible.nombre}
+                                            onChange={(event) => cambiarConsumible(
+                                                indice,
+                                                "nombre",
+                                                event.target.value,
+                                            )}
+                                            maxLength="200"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label htmlFor={`consumible-cantidad-${indice}`}>
+                                            Cantidad entregada
+                                        </label>
+                                        <input
+                                            id={`consumible-cantidad-${indice}`}
+                                            type="number"
+                                            min="1"
+                                            step="1"
+                                            value={consumible.cantidad}
+                                            onChange={(event) => cambiarConsumible(
+                                                indice,
+                                                "cantidad",
+                                                event.target.value,
+                                            )}
+                                            required
+                                        />
+                                    </div>
+                                    <button
+                                        className="table-action table-action-danger"
+                                        type="button"
+                                        aria-label={`Quitar consumible ${indice + 1}`}
+                                        onClick={() => quitarConsumible(indice)}
+                                    >
+                                        Quitar
+                                    </button>
+                                </div>
+                            ))}
+                        </section>
                         <button
                             className="btn btn-primary"
                             type="submit"
-                            disabled={guardando || !activos.length}
+                            disabled={guardando || (
+                                !activos.length
+                                && !formulario.consumibles.some((consumible) =>
+                                    consumible.nombre.trim() && Number(consumible.cantidad) > 0
+                                )
+                            )}
                         >
                             {guardando ? "Guardando..." : "Registrar préstamo"}
                         </button>
@@ -733,7 +961,13 @@ function Prestamos({ devoluciones = false }) {
                                                     ].filter(Boolean).join(" · ")}
                                                 </span>
                                             )}
-                                            <span>{prestamo.total_activos} activo(s) · Vence {prestamo.fecha_devolucion_prevista}</span>
+                                            <span>
+                                                {prestamo.total_herramientas ?? prestamo.total_activos}
+                                                {" "}herramienta(s) · Vence {prestamo.fecha_devolucion_prevista}
+                                            </span>
+                                            {listaHerramientasPrestamo(prestamo) && (
+                                                <span>{listaHerramientasPrestamo(prestamo)}</span>
+                                            )}
                                         </div>
                                         <div className="loan-status-actions">
                                             <span className={`loan-status loan-status-${prestamo.estado.toLocaleLowerCase()}`}>

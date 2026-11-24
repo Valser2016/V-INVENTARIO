@@ -26,6 +26,7 @@ from apps.inventario.models import (
 from apps.movimientos.models import DetallePrestamo, Prestamo, SolicitudPrestamo
 from apps.usuarios.models import Rol
 from apps.levantamiento.services.hoja_vida_excel import (
+    _alto_fila_px,
     _dimensiones_campo_foto,
     _marcador_columna,
     _marcador_fila,
@@ -206,6 +207,44 @@ class InventarioTests(APITestCase):
             nombre="Oficina Central",
         )
         self.client.force_authenticate(user=self.user)
+
+    def test_lista_filtra_en_servidor_por_texto_y_catalogos(self):
+        herramienta = Activo.objects.create(
+            codigo_interno="PC-001",
+            tipo_activo=self.tipo,
+            categoria=self.categoria,
+            nombre="Taladro de mantenimiento",
+            ubicacion=self.ubicacion,
+            estado=self.estado,
+            creado_por=self.user,
+            modificado_por=self.user,
+        )
+        otro_estado = EstadoActivo.objects.create(nombre="En reparación")
+        Activo.objects.create(
+            codigo_interno="PC-002",
+            tipo_activo=self.tipo,
+            categoria=self.categoria,
+            nombre="Taladro en reparación",
+            ubicacion=self.ubicacion,
+            estado=otro_estado,
+            creado_por=self.user,
+            modificado_por=self.user,
+        )
+
+        respuesta = self.client.get(
+            reverse("levantamiento-crear-activo"),
+            {
+                "search": "taladro",
+                "estado": self.estado.pk,
+                "tipo_activo": self.tipo.pk,
+                "categoria": self.categoria.pk,
+                "ubicacion": self.ubicacion.pk,
+            },
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_200_OK)
+        self.assertEqual(respuesta.data["count"], 1)
+        self.assertEqual(respuesta.data["results"][0]["id"], herramienta.pk)
 
     def test_usuarios_devuelve_solo_id_y_nombre_y_excluye_inactivos(self):
         self.user.documento = "DOCUMENTO-PRIVADO"
@@ -552,7 +591,19 @@ class InventarioTests(APITestCase):
             for imagen in hoja._images
             if imagen.anchor._from.row >= 5
         )
+        siguiente_seccion = min(
+            rango.min_row
+            for rango in hoja.merged_cells.ranges
+            if rango.min_col == 1
+            and rango.max_col == 27
+            and rango.min_row > 5
+        )
+        alto_campo_esperado = sum(
+            _alto_fila_px(hoja, fila)
+            for fila in range(6, siguiente_seccion)
+        )
         ancho_campo, alto_campo = _dimensiones_campo_foto(hoja)
+        self.assertEqual(alto_campo, alto_campo_esperado)
         self.assertLessEqual(foto.width, ancho_campo)
         self.assertLessEqual(foto.height, alto_campo)
         self.assertAlmostEqual(foto.width / foto.height, 4 / 3, places=2)

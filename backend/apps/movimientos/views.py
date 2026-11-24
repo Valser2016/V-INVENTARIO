@@ -23,6 +23,7 @@ from apps.usuarios.permissions import (
 )
 
 from .models import (
+    ConsumiblePrestamo,
     DetallePrestamo,
     ListaHerramientasPrestamo,
     Prestamo,
@@ -209,7 +210,7 @@ class SolicitudPrestamoViewSet(viewsets.ModelViewSet):
             )
             if solicitud.estado != SolicitudPrestamo.Estado.REVISADA:
                 raise serializers.ValidationError({
-                    "estado": "Almacén debe revisar la solicitud antes de aprobarla."
+                    "estado": "Completa el checklist antes de aprobar la solicitud."
                 })
 
             revisiones = list(
@@ -454,6 +455,7 @@ class PrestamoViewSet(viewsets.ModelViewSet):
         "detalles__estado_devolucion",
         "detalles__ubicacion_devolucion",
         "detalles__devolucion_registrada_por",
+        "consumibles",
     )
     permission_classes = [PuedeConsultarDevoluciones]
     pagination_class = None
@@ -502,7 +504,7 @@ class PrestamoViewSet(viewsets.ModelViewSet):
     def devolver(self, request, pk=None):
         serializer = RegistrarDevolucionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        datos_devolucion = serializer.validated_data["detalles"]
+        datos_devolucion = serializer.validated_data.get("detalles", [])
 
         with transaction.atomic():
             prestamo = get_object_or_404(
@@ -521,15 +523,38 @@ class PrestamoViewSet(viewsets.ModelViewSet):
                     "detalles": "Uno o más activos no pertenecen a este préstamo."
                 })
 
-            estado_prestado = obtener_estado_prestado()
-            if not estado_prestado:
+            consumibles_devolucion = serializer.validated_data.get(
+                "consumibles",
+                [],
+            )
+            ids_consumibles = [
+                consumible["consumible_id"]
+                for consumible in consumibles_devolucion
+            ]
+            consumibles = list(
+                ConsumiblePrestamo.objects.select_for_update()
+                .filter(prestamo=prestamo, pk__in=ids_consumibles)
+                .order_by("pk")
+            )
+            if len(consumibles) != len(ids_consumibles):
                 raise serializers.ValidationError({
-                    "detalles": (
-                        "El estado 'En servicio' o 'Prestado' ya no está disponible."
-                    )
+                    "consumibles": "Uno o más consumibles no pertenecen a este préstamo."
                 })
 
+            estado_prestado = None
+            if detalles:
+                estado_prestado = obtener_estado_prestado()
+                if not estado_prestado:
+                    raise serializers.ValidationError({
+                        "detalles": (
+                            "El estado 'En servicio' o 'Prestado' ya no está disponible."
+                        )
+                    })
+
             por_id = {detalle.pk: detalle for detalle in detalles}
+            consumibles_por_id = {
+                consumible.pk: consumible for consumible in consumibles
+            }
             ahora = timezone.now()
             for datos in datos_devolucion:
                 if es_estado_prestado(datos["estado"].nombre):
@@ -585,15 +610,40 @@ class PrestamoViewSet(viewsets.ModelViewSet):
                     "cantidad_recibida",
                     "devolucion_registrada_por",
                 ])
+            for datos in consumibles_devolucion:
+                consumible = consumibles_por_id[datos["consumible_id"]]
+                if consumible.cantidad_recibida is not None:
+                    raise serializers.ValidationError({
+                        "consumibles": (
+                            f"El consumible {consumible.nombre} ya tiene una "
+                            "devolución registrada."
+                        )
+                    })
+                if datos["cantidad_recibida"] > consumible.cantidad:
+                    raise serializers.ValidationError({
+                        "consumibles": (
+                            f"La cantidad recibida de {consumible.nombre} no puede "
+                            "ser mayor a la cantidad entregada."
+                        )
+                    })
+                consumible.cantidad_recibida = datos["cantidad_recibida"]
+                consumible.save(update_fields=["cantidad_recibida"])
+
             solicitud = SolicitudPrestamo.objects.filter(
                 prestamo=prestamo,
             ).select_related(
                 "solicitante",
                 "prestamo",
             ).first()
-            if solicitud and not prestamo.detalles.filter(
-                fecha_devolucion__isnull=True,
-            ).exists():
+            if (
+                solicitud
+                and not prestamo.detalles.filter(
+                    fecha_devolucion__isnull=True,
+                ).exists()
+                and not prestamo.consumibles.filter(
+                    cantidad_recibida__isnull=True,
+                ).exists()
+            ):
                 solicitud.formato_retorno_pdf = generar_formato_oys(
                     solicitud,
                     incluir_retorno=True,
@@ -607,6 +657,7 @@ class PrestamoViewSet(viewsets.ModelViewSet):
             "detalles__estado_devolucion",
             "detalles__ubicacion_devolucion",
             "detalles__devolucion_registrada_por",
+            "consumibles",
         ).get(pk=pk)
         return Response(PrestamoSerializer(
             prestamo_actualizado,
