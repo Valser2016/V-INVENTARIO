@@ -813,6 +813,76 @@ function SolicitudesPrestamo() {
                             </div>
                                 </div>
 
+                                <section
+                                    className="loan-consumables"
+                                    aria-label="Consumibles de la solicitud"
+                                >
+                                    <div className="loan-consumables-header">
+                                        <div>
+                                            <h3>Consumibles</h3>
+                                            <p className="form-hint">
+                                                Agrega elementos que no están registrados en el inventario.
+                                            </p>
+                                        </div>
+                                        <button
+                                            className="btn btn-secondary"
+                                            type="button"
+                                            onClick={agregarConsumible}
+                                        >
+                                            Adicionar consumibles
+                                        </button>
+                                    </div>
+                                    {formulario.consumibles.map((consumible, indice) => (
+                                        <div
+                                            className="loan-consumable-row"
+                                            key={`solicitud-consumible-${indice}`}
+                                        >
+                                            <div className="form-group">
+                                                <label htmlFor={`solicitud-consumible-nombre-${indice}`}>
+                                                    Nombre del consumible
+                                                </label>
+                                                <input
+                                                    id={`solicitud-consumible-nombre-${indice}`}
+                                                    value={consumible.nombre}
+                                                    onChange={(event) => cambiarConsumible(
+                                                        indice,
+                                                        "nombre",
+                                                        event.target.value,
+                                                    )}
+                                                    maxLength={200}
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="form-group">
+                                                <label htmlFor={`solicitud-consumible-cantidad-${indice}`}>
+                                                    Cantidad solicitada
+                                                </label>
+                                                <input
+                                                    id={`solicitud-consumible-cantidad-${indice}`}
+                                                    type="number"
+                                                    min="1"
+                                                    step="1"
+                                                    value={consumible.cantidad}
+                                                    onChange={(event) => cambiarConsumible(
+                                                        indice,
+                                                        "cantidad",
+                                                        event.target.value,
+                                                    )}
+                                                    required
+                                                />
+                                            </div>
+                                            <button
+                                                className="table-action table-action-danger"
+                                                type="button"
+                                                aria-label={`Quitar consumible de solicitud ${indice + 1}`}
+                                                onClick={() => quitarConsumible(indice)}
+                                            >
+                                                Quitar
+                                            </button>
+                                        </div>
+                                    ))}
+                                </section>
+
                                 <fieldset className="asset-selection">
                                     <legend>Modo de selección</legend>
                                     <label className="asset-option">
@@ -977,76 +1047,6 @@ function SolicitudesPrestamo() {
                                         </p>
                                     )}
                                 </fieldset>
-
-                                <section
-                                    className="loan-consumables"
-                                    aria-label="Consumibles de la solicitud"
-                                >
-                                    <div className="loan-consumables-header">
-                                        <div>
-                                            <h3>Consumibles</h3>
-                                            <p className="form-hint">
-                                                Agrega elementos que no están registrados en el inventario.
-                                            </p>
-                                        </div>
-                                        <button
-                                            className="btn btn-secondary"
-                                            type="button"
-                                            onClick={agregarConsumible}
-                                        >
-                                            Adicionar consumibles
-                                        </button>
-                                    </div>
-                                    {formulario.consumibles.map((consumible, indice) => (
-                                        <div
-                                            className="loan-consumable-row"
-                                            key={`solicitud-consumible-${indice}`}
-                                        >
-                                            <div className="form-group">
-                                                <label htmlFor={`solicitud-consumible-nombre-${indice}`}>
-                                                    Nombre del consumible
-                                                </label>
-                                                <input
-                                                    id={`solicitud-consumible-nombre-${indice}`}
-                                                    value={consumible.nombre}
-                                                    onChange={(event) => cambiarConsumible(
-                                                        indice,
-                                                        "nombre",
-                                                        event.target.value,
-                                                    )}
-                                                    maxLength={200}
-                                                    required
-                                                />
-                                            </div>
-                                            <div className="form-group">
-                                                <label htmlFor={`solicitud-consumible-cantidad-${indice}`}>
-                                                    Cantidad solicitada
-                                                </label>
-                                                <input
-                                                    id={`solicitud-consumible-cantidad-${indice}`}
-                                                    type="number"
-                                                    min="1"
-                                                    step="1"
-                                                    value={consumible.cantidad}
-                                                    onChange={(event) => cambiarConsumible(
-                                                        indice,
-                                                        "cantidad",
-                                                        event.target.value,
-                                                    )}
-                                                    required
-                                                />
-                                            </div>
-                                            <button
-                                                className="table-action table-action-danger"
-                                                type="button"
-                                                aria-label={`Quitar consumible de solicitud ${indice + 1}`}
-                                                onClick={() => quitarConsumible(indice)}
-                                            >
-                                                Quitar
-                                            </button>
-                                        </div>
-                                    ))}
-                                </section>
 
                                 <div className="request-submit-actions">
                                     <button

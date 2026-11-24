@@ -86,9 +86,9 @@ observación, estado y ubicación. Antes de guardar la devolución, Almacén rev
 un resumen del checklist y confirma los datos.
 
 Después de actualizar el proyecto, aplica las migraciones con
-`python manage.py migrate` desde `backend/`. **Préstamos** y **Solicitudes**
-comparten el flujo de aprobación: crear una solicitud no registra el préstamo
-ni cambia el estado de los activos. Se pueden incluir activos del inventario y
+`python manage.py migrate` desde `backend/`. **Solicitudes** es el único punto
+para iniciar un préstamo: crear una solicitud no registra el préstamo ni cambia
+el estado de los activos. Se pueden incluir activos del inventario y
 consumibles independientes en una misma solicitud. Almacén completa el checklist
 físico de cada activo como **Bueno** o **Malo**, puede excluir de la salida uno
 que no esté en condiciones y genera el PDF previo. Si la solicitud solo contiene
