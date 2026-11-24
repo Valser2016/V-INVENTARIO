@@ -53,9 +53,11 @@ const renderPage = (permisos = { puede_modificar_inventario: true }) => render(
 
 const prepararRespuestas = () => {
     vi.mocked(api.get).mockImplementation((url) => {
-        if (url === "/levantamiento/activos/?page=1") {
+        if (url.startsWith("/levantamiento/activos/?page=1")) {
             return Promise.resolve({
-                data: { count: 1, next: null, previous: null, results: [activo] },
+                data: url.includes("search=no+existe")
+                    ? { count: 0, next: null, previous: null, results: [] }
+                    : { count: 1, next: null, previous: null, results: [activo] },
             });
         }
         if (url === "/levantamiento/tipos/") {
@@ -63,6 +65,11 @@ const prepararRespuestas = () => {
         }
         if (url === "/levantamiento/categorias/?tipo_activo=2") {
             return Promise.resolve({ data: [{ id: 3, nombre: "Portátil" }] });
+        }
+        if (url === "/levantamiento/categorias/") {
+            return Promise.resolve({
+                data: [{ id: 3, nombre: "Portátil", tipo_activo: 2 }],
+            });
         }
         if (url === "/levantamiento/estados/") {
             return Promise.resolve({ data: [{ id: 5, nombre: "Disponible" }] });
@@ -90,6 +97,31 @@ afterEach(() => {
 });
 
 describe("Edición de inventario", () => {
+    it("filtra en cada cambio de la búsqueda y permite combinar filtros", async () => {
+        prepararRespuestas();
+        const user = userEvent.setup();
+        renderPage();
+
+        await screen.findByText("PC-001");
+        await user.type(screen.getByRole("searchbox", { name: "Buscar activos" }), "no existe");
+
+        await waitFor(() => {
+            expect(api.get).toHaveBeenCalledWith(
+                expect.stringContaining("search=no+existe"),
+            );
+        });
+        expect(await screen.findByText(
+            "No se encontraron activos con esos filtros.",
+        )).toBeInTheDocument();
+
+        await user.selectOptions(screen.getByLabelText("Estado"), "5");
+        await waitFor(() => {
+            expect(api.get).toHaveBeenCalledWith(
+                expect.stringContaining("estado=5"),
+            );
+        });
+    });
+
     it("muestra solo las columnas solicitadas y abre la hoja de vida completa", async () => {
         prepararRespuestas();
         const user = userEvent.setup();

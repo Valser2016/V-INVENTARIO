@@ -21,6 +21,7 @@ from apps.inventario.models import (
     Ubicacion,
 )
 from apps.movimientos.models import (
+    ConsumiblePrestamo,
     DetallePrestamo,
     ListaHerramientasPrestamo,
     Prestamo,
@@ -336,6 +337,68 @@ class PrestamoApiTests(APITestCase):
         self.activo_2.refresh_from_db()
         self.assertEqual(self.activo_1.estado, self.prestado)
         self.assertEqual(self.activo_2.estado, self.prestado)
+
+    def test_crea_y_registra_devolucion_de_consumibles_sin_activos_de_inventario(self):
+        payload = self.crear_payload()
+        payload.pop("activos")
+        payload["consumibles"] = [{"nombre": "Cinta aislante", "cantidad": 5}]
+
+        creada = self.client.post(
+            reverse("prestamo-list"),
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(creada.status_code, status.HTTP_201_CREATED)
+        consumible_id = creada.data["consumibles"][0]["id"]
+        self.assertEqual(creada.data["total_activos"], 0)
+        self.assertEqual(creada.data["total_herramientas"], 1)
+        self.assertEqual(creada.data["items_pendientes"], 1)
+        self.assertEqual(self.activo_1.estado, self.disponible)
+
+        devolucion = self.client.post(
+            reverse("prestamo-devolver", args=[creada.data["id"]]),
+            {
+                "consumibles": [{
+                    "consumible_id": consumible_id,
+                    "cantidad_recibida": 3,
+                }],
+            },
+            format="json",
+        )
+
+        self.assertEqual(devolucion.status_code, status.HTTP_200_OK)
+        self.assertEqual(devolucion.data["estado"], "Devuelto")
+        self.assertEqual(devolucion.data["items_pendientes"], 0)
+        consumible = ConsumiblePrestamo.objects.get(pk=consumible_id)
+        self.assertEqual(consumible.cantidad_recibida, 3)
+
+    def test_rechaza_cantidad_recibida_mayor_a_la_entregada(self):
+        payload = self.crear_payload()
+        payload.pop("activos")
+        payload["consumibles"] = [{"nombre": "Guantes", "cantidad": 2}]
+        prestamo = self.client.post(
+            reverse("prestamo-list"),
+            payload,
+            format="json",
+        )
+
+        response = self.client.post(
+            reverse("prestamo-devolver", args=[prestamo.data["id"]]),
+            {
+                "consumibles": [{
+                    "consumible_id": prestamo.data["consumibles"][0]["id"],
+                    "cantidad_recibida": 3,
+                }],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        consumible = ConsumiblePrestamo.objects.get(
+            pk=prestamo.data["consumibles"][0]["id"],
+        )
+        self.assertIsNone(consumible.cantidad_recibida)
 
     def test_rechaza_consecutivo_duplicado_en_prestamos_sin_distinguir_mayusculas(self):
         self.client.post(

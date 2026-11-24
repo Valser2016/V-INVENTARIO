@@ -208,6 +208,44 @@ class InventarioTests(APITestCase):
         )
         self.client.force_authenticate(user=self.user)
 
+    def test_lista_filtra_en_servidor_por_texto_y_catalogos(self):
+        herramienta = Activo.objects.create(
+            codigo_interno="PC-001",
+            tipo_activo=self.tipo,
+            categoria=self.categoria,
+            nombre="Taladro de mantenimiento",
+            ubicacion=self.ubicacion,
+            estado=self.estado,
+            creado_por=self.user,
+            modificado_por=self.user,
+        )
+        otro_estado = EstadoActivo.objects.create(nombre="En reparación")
+        Activo.objects.create(
+            codigo_interno="PC-002",
+            tipo_activo=self.tipo,
+            categoria=self.categoria,
+            nombre="Taladro en reparación",
+            ubicacion=self.ubicacion,
+            estado=otro_estado,
+            creado_por=self.user,
+            modificado_por=self.user,
+        )
+
+        respuesta = self.client.get(
+            reverse("levantamiento-crear-activo"),
+            {
+                "search": "taladro",
+                "estado": self.estado.pk,
+                "tipo_activo": self.tipo.pk,
+                "categoria": self.categoria.pk,
+                "ubicacion": self.ubicacion.pk,
+            },
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_200_OK)
+        self.assertEqual(respuesta.data["count"], 1)
+        self.assertEqual(respuesta.data["results"][0]["id"], herramienta.pk)
+
     def test_usuarios_devuelve_solo_id_y_nombre_y_excluye_inactivos(self):
         self.user.documento = "DOCUMENTO-PRIVADO"
         self.user.cargo = "Cargo privado"
