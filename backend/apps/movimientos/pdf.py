@@ -204,10 +204,18 @@ def _rellenar_plantilla(
             for revision in revisiones
             if revision.incluir_en_salida
         ]
+    consumibles = list(
+        prestamo.consumibles.all() if prestamo else solicitud.consumibles.all()
+    )
+    lineas_salida = [
+        ("activo", detalle) for detalle in detalles
+    ] + [
+        ("consumible", consumible) for consumible in consumibles
+    ]
     if incluir_retorno and not prestamo:
         raise ValueError("No se puede generar un formato de retorno sin préstamo.")
-    if not detalles:
-        raise ValueError("No se puede generar OYS-FO-09 sin activos.")
+    if not lineas_salida:
+        raise ValueError("No se puede generar OYS-FO-09 sin elementos.")
 
     with warnings.catch_warnings():
         warnings.filterwarnings(
@@ -230,7 +238,7 @@ def _rellenar_plantilla(
         libro.active = libro.sheetnames.index(HOJA_OYS)
         _agregar_logo_oys(hoja)
 
-        extras = _extender_filas_activos(hoja, len(detalles))
+        extras = _extender_filas_activos(hoja, len(lineas_salida))
 
         _establecer_texto(hoja, "D5", solicitud.cliente)
         _establecer_texto(hoja, "M5", _nombre_usuario(solicitud.solicitante))
@@ -310,39 +318,56 @@ def _rellenar_plantilla(
             "\n".join(observaciones),
         )
 
-        for indice, detalle in enumerate(detalles):
+        for indice, (tipo, elemento) in enumerate(lineas_salida):
             fila = FILA_ACTIVOS_INICIO + indice
-            activo = detalle.activo
-            _establecer_texto(
-                hoja,
-                f"B{fila}",
-                f"{activo.codigo_interno} - {activo.nombre}",
-            )
-            _establecer_texto(hoja, f"J{fila}", activo.marca)
-            _establecer_texto(hoja, f"L{fila}", activo.serie_codigo)
-            hoja[f"N{fila}"] = 1
-            hoja[f"O{fila}"] = 1
-            if incluir_retorno:
-                hoja[f"P{fila}"] = detalle.cantidad_recibida or 0
-                estado = (
-                    "Bueno"
-                    if detalle.condicion_devolucion
-                    == DetallePrestamo.CondicionDevolucion.BUENO
-                    else "Malo"
-                    if detalle.condicion_devolucion
-                    in {
-                        DetallePrestamo.CondicionDevolucion.CON_NOVEDAD,
-                        DetallePrestamo.CondicionDevolucion.DANADO,
-                    }
-                    else ""
+            if tipo == "activo":
+                detalle = elemento
+                activo = detalle.activo
+                _establecer_texto(
+                    hoja,
+                    f"B{fila}",
+                    f"{activo.codigo_interno} - {activo.nombre}",
                 )
+                _establecer_texto(hoja, f"J{fila}", activo.marca)
+                _establecer_texto(hoja, f"L{fila}", activo.serie_codigo)
+                hoja[f"N{fila}"] = 1
+                hoja[f"O{fila}"] = 1
+                if incluir_retorno:
+                    hoja[f"P{fila}"] = detalle.cantidad_recibida or 0
+                    estado = (
+                        "Bueno"
+                        if detalle.condicion_devolucion
+                        == DetallePrestamo.CondicionDevolucion.BUENO
+                        else "Malo"
+                        if detalle.condicion_devolucion
+                        in {
+                            DetallePrestamo.CondicionDevolucion.CON_NOVEDAD,
+                            DetallePrestamo.CondicionDevolucion.DANADO,
+                        }
+                        else ""
+                    )
+                else:
+                    hoja[f"P{fila}"] = None
+                    condicion = condiciones.get(activo.pk, "")
+                    estado = {
+                        "BUENO": "Bueno",
+                        "MALO": "Malo",
+                    }.get(condicion, "")
             else:
-                hoja[f"P{fila}"] = None
-                condicion = condiciones.get(activo.pk, "")
-                estado = {
-                    "BUENO": "Bueno",
-                    "MALO": "Malo",
-                }.get(condicion, "")
+                consumible = elemento
+                _establecer_texto(
+                    hoja,
+                    f"B{fila}",
+                    f"Consumible: {consumible.nombre}",
+                )
+                hoja[f"N{fila}"] = consumible.cantidad
+                hoja[f"O{fila}"] = consumible.cantidad
+                hoja[f"P{fila}"] = (
+                    consumible.cantidad_recibida or 0
+                    if incluir_retorno
+                    else None
+                )
+                estado = ""
             _establecer_texto(hoja, f"Q{fila}", estado)
 
         if extras:

@@ -106,6 +106,23 @@ class SolicitudPrestamo(models.Model):
         return f"Solicitud {self.pk} - {self.nombre_receptor}"
 
 
+class ConsumibleSolicitud(models.Model):
+    solicitud = models.ForeignKey(
+        SolicitudPrestamo,
+        on_delete=models.CASCADE,
+        related_name="consumibles",
+    )
+    nombre = models.CharField(max_length=200)
+    cantidad = models.PositiveIntegerField()
+
+    class Meta:
+        db_table = "consumibles_solicitud_prestamo"
+        ordering = ["pk"]
+
+    def __str__(self):
+        return f"{self.solicitud_id} - {self.nombre}"
+
+
 class ListaHerramientasPrestamo(models.Model):
     nombre = models.CharField(max_length=100)
     activos = models.ManyToManyField(

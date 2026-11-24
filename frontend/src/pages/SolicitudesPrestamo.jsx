@@ -95,6 +95,7 @@ function SolicitudesPrestamo() {
         motivo: "",
         observaciones: "",
         activos: [],
+        consumibles: [],
     });
 
     const cargarDatos = useCallback(async () => {
@@ -145,6 +146,31 @@ function SolicitudesPrestamo() {
         cambiarCampo(
             "activos",
             alternarActivoSeleccionado(formulario.activos, id)
+        );
+    };
+
+    const agregarConsumible = () => {
+        cambiarCampo("consumibles", [
+            ...formulario.consumibles,
+            { nombre: "", cantidad: "1" },
+        ]);
+    };
+
+    const cambiarConsumible = (indice, campo, valor) => {
+        cambiarCampo(
+            "consumibles",
+            formulario.consumibles.map((consumible, actual) =>
+                actual === indice
+                    ? { ...consumible, [campo]: valor }
+                    : consumible
+            ),
+        );
+    };
+
+    const quitarConsumible = (indice) => {
+        cambiarCampo(
+            "consumibles",
+            formulario.consumibles.filter((_, actual) => actual !== indice),
         );
     };
 
@@ -273,13 +299,17 @@ function SolicitudesPrestamo() {
                 motivo: "",
                 observaciones: "",
                 activos: [],
+                consumibles: [],
             });
             setModoSeleccion("individual");
             setListaSeleccionadaId("");
             setAvisoLista("");
+            const requiereChecklist = formulario.activos.length > 0;
             setMensaje(administrador
-                ? "La solicitud se registró. Completa el checklist y apruébala para registrar el préstamo."
-                : "Tu solicitud fue enviada a Almacén para revisión.");
+                ? requiereChecklist
+                    ? "La solicitud se registró. Completa el checklist y apruébala para registrar el préstamo."
+                    : "La solicitud se registró. Valídala y apruébala para registrar el préstamo."
+                : "Tu solicitud fue enviada a revisión.");
             setFormularioAbierto(false);
             setSolicitudesAbiertas(true);
             await cargarDatos();
@@ -456,6 +486,11 @@ function SolicitudesPrestamo() {
         activos,
         "tipo_activo_id",
         "tipo_activo_nombre",
+    );
+    const tieneConsumiblesValidos = formulario.consumibles.some(
+        (consumible) => consumible.nombre.trim()
+            && Number.isInteger(Number(consumible.cantidad))
+            && Number(consumible.cantidad) > 0,
     );
     const categoriasDisponibles = opcionesUnicas(
         activos,
@@ -943,11 +978,88 @@ function SolicitudesPrestamo() {
                                     )}
                                 </fieldset>
 
+                                <section
+                                    className="loan-consumables"
+                                    aria-label="Consumibles de la solicitud"
+                                >
+                                    <div className="loan-consumables-header">
+                                        <div>
+                                            <h3>Consumibles</h3>
+                                            <p className="form-hint">
+                                                Agrega elementos que no están registrados en el inventario.
+                                            </p>
+                                        </div>
+                                        <button
+                                            className="btn btn-secondary"
+                                            type="button"
+                                            onClick={agregarConsumible}
+                                        >
+                                            Adicionar consumibles
+                                        </button>
+                                    </div>
+                                    {formulario.consumibles.map((consumible, indice) => (
+                                        <div
+                                            className="loan-consumable-row"
+                                            key={`solicitud-consumible-${indice}`}
+                                        >
+                                            <div className="form-group">
+                                                <label htmlFor={`solicitud-consumible-nombre-${indice}`}>
+                                                    Nombre del consumible
+                                                </label>
+                                                <input
+                                                    id={`solicitud-consumible-nombre-${indice}`}
+                                                    value={consumible.nombre}
+                                                    onChange={(event) => cambiarConsumible(
+                                                        indice,
+                                                        "nombre",
+                                                        event.target.value,
+                                                    )}
+                                                    maxLength={200}
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="form-group">
+                                                <label htmlFor={`solicitud-consumible-cantidad-${indice}`}>
+                                                    Cantidad solicitada
+                                                </label>
+                                                <input
+                                                    id={`solicitud-consumible-cantidad-${indice}`}
+                                                    type="number"
+                                                    min="1"
+                                                    step="1"
+                                                    value={consumible.cantidad}
+                                                    onChange={(event) => cambiarConsumible(
+                                                        indice,
+                                                        "cantidad",
+                                                        event.target.value,
+                                                    )}
+                                                    required
+                                                />
+                                            </div>
+                                            <button
+                                                className="table-action table-action-danger"
+                                                type="button"
+                                                aria-label={`Quitar consumible de solicitud ${indice + 1}`}
+                                                onClick={() => quitarConsumible(indice)}
+                                            >
+                                                Quitar
+                                            </button>
+                                        </div>
+                                    ))}
+                                </section>
+
                                 <div className="request-submit-actions">
                                     <button
                                         className="btn btn-primary"
                                         type="submit"
-                                        disabled={guardando || cargando || activos.length === 0}
+                                        disabled={
+                                            guardando
+                                            || cargando
+                                            || (
+                                                formulario.activos.length === 0
+                                                && !tieneConsumiblesValidos
+                                            )
+                                        }
                                     >
                                         {guardando ? "Enviando..." : "Enviar solicitud"}
                                     </button>
@@ -1025,11 +1137,19 @@ function SolicitudesPrestamo() {
 
                                     <div className="request-details">
                                         <p><strong>Motivo:</strong> {solicitud.motivo}</p>
-                                        {!puedeRevisar && (
+                                        {!puedeRevisar && solicitud.activos.length > 0 && (
                                             <p>
                                                 <strong>Activos:</strong>{" "}
                                                 {solicitud.activos.map((activo) =>
                                                     `${activo.codigo_interno} — ${activo.nombre}`
+                                                ).join(", ")}
+                                            </p>
+                                        )}
+                                        {solicitud.consumibles?.length > 0 && (
+                                            <p>
+                                                <strong>Consumibles:</strong>{" "}
+                                                {solicitud.consumibles.map((consumible) =>
+                                                    `${consumible.nombre} (${consumible.cantidad})`
                                                 ).join(", ")}
                                             </p>
                                         )}
@@ -1056,7 +1176,9 @@ function SolicitudesPrestamo() {
                                         )}
                                     </div>
 
-                                    {puedeRevisar && ["PENDIENTE", "REVISADA"].includes(solicitud.estado) && (
+                                    {puedeRevisar
+                                        && solicitud.activos.length > 0
+                                        && ["PENDIENTE", "REVISADA"].includes(solicitud.estado) && (
                                         <div className="request-review">
                                             <h3>Checklist de Almacén</h3>
                                             <div className="asset-review-scroll">
@@ -1146,7 +1268,33 @@ function SolicitudesPrestamo() {
                                         </div>
                                     )}
 
-                                    {puedeRevisar && solicitud.estado === "REVISADA" && (
+                                    {puedeRevisar
+                                        && solicitud.activos.length === 0
+                                        && solicitud.estado === "PENDIENTE" && (
+                                        <div className="request-review">
+                                            <h3>Validar solicitud</h3>
+                                            <p className="request-review-hint">
+                                                Esta solicitud no tiene activos de inventario. Revisa los consumibles y envíala a aprobación.
+                                            </p>
+                                            <button
+                                                className="btn btn-primary"
+                                                type="button"
+                                                disabled={
+                                                    resolviendoId !== null
+                                                    || eliminandoId !== null
+                                                }
+                                                onClick={() => guardarRevision(solicitud)}
+                                            >
+                                                {resolviendoId === solicitud.id
+                                                    ? "Guardando..."
+                                                    : "Validar y enviar a aprobación"}
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {puedeRevisar
+                                        && solicitud.activos.length > 0
+                                        && solicitud.estado === "REVISADA" && (
                                         <div className="request-details">
                                             {solicitud.activos.map((activo) => (
                                                 <p key={activo.id}>
@@ -1208,7 +1356,9 @@ function SolicitudesPrestamo() {
                                             )}
                                             {solicitud.estado !== "REVISADA" && (
                                                 <p className="form-hint">
-                                                    Completa el checklist antes de aprobar.
+                                                    {solicitud.activos.length > 0
+                                                        ? "Completa el checklist antes de aprobar."
+                                                        : "Valida la solicitud antes de aprobar."}
                                                 </p>
                                             )}
                                             {solicitud.activos.some(
@@ -1221,9 +1371,10 @@ function SolicitudesPrestamo() {
                                             )}
                                             {!solicitud.activos.some(
                                                 (activo) => activo.incluir_en_salida,
-                                            ) && solicitud.estado === "REVISADA" && (
+                                            ) && !solicitud.consumibles?.length
+                                                && solicitud.estado === "REVISADA" && (
                                                 <p className="alert alert-error" role="alert">
-                                                    Incluye al menos un activo en la salida antes de aprobar.
+                                                    Incluye al menos un activo o consumible en la salida antes de aprobar.
                                                 </p>
                                             )}
                                             <div className="request-action-buttons">
@@ -1238,8 +1389,11 @@ function SolicitudesPrestamo() {
                                                             (activo) => activo.incluir_en_salida
                                                                 && activo.condicion === "MALO",
                                                         )
-                                                        || !solicitud.activos.some(
-                                                            (activo) => activo.incluir_en_salida,
+                                                        || (
+                                                            !solicitud.activos.some(
+                                                                (activo) => activo.incluir_en_salida,
+                                                            )
+                                                            && !solicitud.consumibles?.length
                                                         )
                                                     }
                                                     onClick={() => resolverSolicitud(solicitud, "aprobar")}

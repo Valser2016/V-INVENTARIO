@@ -85,25 +85,27 @@ posteriores al día actual. Al devolver, se registra por activo su condición,
 observación, estado y ubicación. Antes de guardar la devolución, Almacén revisa
 un resumen del checklist y confirma los datos.
 
-Después de actualizar el proyecto, aplica la migración con `python manage.py migrate`
-desde `backend/`. La pantalla está disponible en **Préstamos** y
-**Devoluciones**. Los usuarios cuyo rol tenga permiso de movimientos también
-pueden enviar solicitudes desde **Solicitudes**. La solicitud no reserva ni
-cambia el estado de los activos. Almacén completa el checklist físico de cada
-herramienta como **Bueno** o **Malo**, puede excluir de la salida una herramienta
-que no esté en condiciones y genera el PDF previo. Administración y los usuarios
-con permiso de revisión pueden aprobar; Administración y los usuarios con permiso
-de aprobación pueden rechazar. Solo se puede aprobar después del checklist y si
-todos los activos incluidos están en buen estado. Al aprobar, el sistema vuelve
-a comprobar la disponibilidad y registra el préstamo, actualizando el inventario.
+Después de actualizar el proyecto, aplica las migraciones con
+`python manage.py migrate` desde `backend/`. **Préstamos** y **Solicitudes**
+comparten el flujo de aprobación: crear una solicitud no registra el préstamo
+ni cambia el estado de los activos. Se pueden incluir activos del inventario y
+consumibles independientes en una misma solicitud. Almacén completa el checklist
+físico de cada activo como **Bueno** o **Malo**, puede excluir de la salida uno
+que no esté en condiciones y genera el PDF previo. Si la solicitud solo contiene
+consumibles, Almacén la valida sin checklist de activos. Administración y los
+usuarios con permiso de revisión pueden aprobar; Administración y los usuarios
+con permiso de aprobación pueden rechazar. Al aprobar, el sistema vuelve a
+comprobar la disponibilidad, crea el préstamo con sus activos y consumibles, y
+actualiza el inventario.
 
 Las solicitudes piden el cliente y un consecutivo global no repetido. Al
-aprobarse, se guarda el PDF OYS-FO-09 de salida; al devolver el último activo,
-se genera por separado el PDF de retorno con cantidad recibida, condición,
-estado, observaciones y usuario de almacén. La salida puede descargarse como
-PDF previo antes de la aprobación; al confirmar la devolución del último activo,
-el navegador descarga automáticamente el PDF actualizado. Ambos formatos
-conservan el logo, usan fechas
+aprobarse, se guarda el PDF OYS-FO-09 de salida; al confirmar la devolución de
+todos sus elementos, se genera por separado el PDF de retorno con cantidad
+recibida, condición, estado, observaciones y usuario de almacén. Los consumibles
+aparecen en la salida junto con su cantidad y su devolución conserva la cantidad
+recibida. La salida puede descargarse como PDF previo antes de la aprobación;
+al confirmar la devolución de todos los elementos, el navegador descarga
+automáticamente el PDF actualizado. Ambos formatos conservan el logo, usan fechas
 `AAAA-MM-DD` y expresan la condición física como **Bueno** o **Malo**.
 Administración asigna por separado los permisos de **Modificar inventario**,
 **Administrar catálogos**, **Revisar checklist y generar PDF previo**,

@@ -145,7 +145,7 @@ describe("Solicitudes de préstamo", () => {
         expect(await screen.findByText("SOLICITUD #12")).toBeInTheDocument();
     });
 
-    it("permite al técnico solicitar activos sin registrar un préstamo", async () => {
+    it("permite al técnico solicitar activos y consumibles sin registrar un préstamo", async () => {
         prepararRespuestas();
         const user = userEvent.setup();
         renderPage();
@@ -168,6 +168,15 @@ describe("Solicitudes de préstamo", () => {
             "Trabajo en planta",
         );
         await user.click(screen.getByLabelText(/PC-008 — Portátil de pruebas/));
+        await user.click(screen.getByRole("button", {
+            name: "Adicionar consumibles",
+        }));
+        await user.type(
+            screen.getByLabelText("Nombre del consumible"),
+            "Cinta aislante",
+        );
+        await user.clear(screen.getByLabelText("Cantidad solicitada"));
+        await user.type(screen.getByLabelText("Cantidad solicitada"), "2");
         await user.click(screen.getByRole("button", { name: "Enviar solicitud" }));
 
         await waitFor(() => {
@@ -180,11 +189,15 @@ describe("Solicitudes de préstamo", () => {
                     documento_receptor: "654321",
                     motivo: "Trabajo en planta",
                     activos: [8],
+                    consumibles: [{
+                        nombre: "Cinta aislante",
+                        cantidad: "2",
+                    }],
                 }),
             );
         });
         expect(await screen.findByRole("status")).toHaveTextContent(
-            "Tu solicitud fue enviada a Almacén para revisión.",
+            "Tu solicitud fue enviada a revisión.",
         );
         expect(await screen.findByRole("button", {
             name: "Mis solicitudes",
@@ -211,6 +224,15 @@ describe("Solicitudes de préstamo", () => {
             "Trabajo en planta",
         );
         await user.click(screen.getByLabelText(/PC-008 — Portátil de pruebas/));
+        await user.click(screen.getByRole("button", {
+            name: "Adicionar consumibles",
+        }));
+        await user.type(
+            screen.getByLabelText("Nombre del consumible"),
+            "Cinta aislante",
+        );
+        await user.clear(screen.getByLabelText("Cantidad solicitada"));
+        await user.type(screen.getByLabelText("Cantidad solicitada"), "2");
         await user.click(screen.getByRole("button", { name: "Enviar solicitud" }));
 
         await waitFor(() => {
@@ -221,12 +243,55 @@ describe("Solicitudes de préstamo", () => {
                     consecutivo: "OS-1003",
                     nombre_receptor: "Administración",
                     activos: [8],
+                    consumibles: [{
+                        nombre: "Cinta aislante",
+                        cantidad: "2",
+                    }],
                 }),
             );
         });
         expect(await screen.findByRole("status")).toHaveTextContent(
             "La solicitud se registró. Completa el checklist y apruébala para registrar el préstamo.",
         );
+    });
+
+    it("permite enviar una solicitud únicamente con consumibles", async () => {
+        prepararRespuestas([], [], [], []);
+        const user = userEvent.setup();
+        renderPage();
+
+        await user.click(screen.getByRole("button", { name: "Nueva solicitud" }));
+        await user.type(screen.getByLabelText("Cliente"), "Acme Industrial");
+        await user.type(screen.getByLabelText("Consecutivo del servicio"), "OS-1004");
+        await user.type(screen.getByLabelText("Nombre del colaborador"), "Técnico");
+        await user.type(screen.getByLabelText("Documento"), "654321");
+        await user.type(
+            screen.getByLabelText("¿Para qué necesitas los activos?"),
+            "Trabajo en planta",
+        );
+        await user.click(screen.getByRole("button", {
+            name: "Adicionar consumibles",
+        }));
+        await user.type(
+            screen.getByLabelText("Nombre del consumible"),
+            "Guantes de nitrilo",
+        );
+        await user.clear(screen.getByLabelText("Cantidad solicitada"));
+        await user.type(screen.getByLabelText("Cantidad solicitada"), "3");
+        await user.click(screen.getByRole("button", { name: "Enviar solicitud" }));
+
+        await waitFor(() => {
+            expect(api.post).toHaveBeenCalledWith(
+                "/movimientos/solicitudes-prestamo/",
+                expect.objectContaining({
+                    activos: [],
+                    consumibles: [{
+                        nombre: "Guantes de nitrilo",
+                        cantidad: "3",
+                    }],
+                }),
+            );
+        });
     });
 
     it("preselecciona los activos disponibles de una lista y permite agregar otros", async () => {
@@ -409,6 +474,63 @@ describe("Solicitudes de préstamo", () => {
         expect(screen.queryByRole("button", {
             name: "Rechazar solicitud",
         })).not.toBeInTheDocument();
+    });
+
+    it("permite a Almacén validar y aprobar una solicitud solo de consumibles", async () => {
+        let solicitudActual = {
+            ...solicitud,
+            activos: [],
+            consumibles: [{ id: 31, nombre: "Guantes de nitrilo", cantidad: 3 }],
+        };
+        vi.mocked(api.get).mockImplementation((url) => {
+            if (url === "/movimientos/solicitudes-prestamo/") {
+                return Promise.resolve({ data: [solicitudActual] });
+            }
+            return Promise.reject(new Error(`URL no esperada: ${url}`));
+        });
+        vi.mocked(api.post).mockImplementation((url) => {
+            if (url.endsWith("/revisar/")) {
+                solicitudActual = {
+                    ...solicitudActual,
+                    estado: "REVISADA",
+                    estado_nombre: "Revisada",
+                };
+            } else if (url.endsWith("/aprobar/")) {
+                solicitudActual = {
+                    ...solicitudActual,
+                    estado: "APROBADA",
+                    estado_nombre: "Aprobada",
+                    prestamo_id: 44,
+                };
+            }
+            return Promise.resolve({ data: solicitudActual });
+        });
+        const user = userEvent.setup();
+        renderPage(false, {
+            puede_ver_movimientos: false,
+            puede_revisar_solicitudes_prestamo: true,
+        });
+
+        await abrirSolicitudes(user, "Solicitudes por aprobar");
+        expect(await screen.findByText("Guantes de nitrilo (3)")).toBeInTheDocument();
+        await user.click(await screen.findByRole("button", {
+            name: "Validar y enviar a aprobación",
+        }));
+
+        await user.click(await screen.findByRole("button", {
+            name: "Aprobar y registrar préstamo",
+        }));
+
+        expect(api.post).toHaveBeenNthCalledWith(
+            1,
+            "/movimientos/solicitudes-prestamo/12/revisar/",
+            { detalles: [] },
+        );
+        expect(api.post).toHaveBeenNthCalledWith(
+            2,
+            "/movimientos/solicitudes-prestamo/12/aprobar/",
+            {},
+        );
     });
 
     it("permite a Almacén completar el checklist y generar el PDF previo", async () => {
