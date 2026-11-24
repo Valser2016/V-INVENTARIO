@@ -112,7 +112,16 @@ class PuedeSolicitarPrestamo(BasePermission):
                 "Solo un administrador puede eliminar solicitudes."
             )
             return es_administrador(request.user)
-        if action in {"aprobar", "rechazar"}:
+        if action == "aprobar":
+            self.message = "Tu rol no tiene permiso para aprobar o rechazar solicitudes."
+            return es_administrador(request.user) or puede_consultar(
+                request.user,
+                "puede_aprobar_solicitudes_prestamo",
+            ) or puede_consultar(
+                request.user,
+                "puede_revisar_solicitudes_prestamo",
+            )
+        if action == "rechazar":
             self.message = "Tu rol no tiene permiso para aprobar o rechazar solicitudes."
             return es_administrador(request.user) or puede_consultar(
                 request.user,

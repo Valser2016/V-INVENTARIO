@@ -91,11 +91,11 @@ desde `backend/`. La pantalla está disponible en **Préstamos** y
 pueden enviar solicitudes desde **Solicitudes**. La solicitud no reserva ni
 cambia el estado de los activos. Almacén completa el checklist físico de cada
 herramienta como **Bueno** o **Malo**, puede excluir de la salida una herramienta
-que no esté en condiciones y genera el PDF previo. Solo Administración o un rol
-con permiso de aprobación puede aprobar/rechazar; solo se puede aprobar después
-del checklist y si todos los activos incluidos están en buen estado. Al aprobar,
-el sistema vuelve a comprobar la disponibilidad y registra el préstamo,
-actualizando el inventario.
+que no esté en condiciones y genera el PDF previo. Administración y los usuarios
+con permiso de revisión pueden aprobar; Administración y los usuarios con permiso
+de aprobación pueden rechazar. Solo se puede aprobar después del checklist y si
+todos los activos incluidos están en buen estado. Al aprobar, el sistema vuelve
+a comprobar la disponibilidad y registra el préstamo, actualizando el inventario.
 
 Las solicitudes piden el cliente y un consecutivo global no repetido. Al
 aprobarse, se guarda el PDF OYS-FO-09 de salida; al devolver el último activo,

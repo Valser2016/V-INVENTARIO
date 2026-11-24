@@ -40,14 +40,17 @@ function SolicitudesPrestamo() {
     const puedeRevisar = administrador || Boolean(
         perfil?.permisos?.puede_revisar_solicitudes_prestamo,
     );
-    const puedeAprobar = administrador || Boolean(
+    const puedeAprobar = puedeRevisar || Boolean(
+        perfil?.permisos?.puede_aprobar_solicitudes_prestamo,
+    );
+    const puedeRechazar = administrador || Boolean(
         perfil?.permisos?.puede_aprobar_solicitudes_prestamo,
     );
     const puedeAdministrarListas = administrador || Boolean(
         perfil?.permisos?.puede_administrar_catalogos,
     );
     const puedeGestionarSolicitudes = puedeRevisar || puedeAprobar;
-    const puedeSolicitar = !administrador && Boolean(
+    const puedeSolicitar = administrador || Boolean(
         perfil?.permisos?.puede_ver_movimientos,
     );
     const esTecnicoSolicitante = puedeSolicitar && !puedeGestionarSolicitudes;
@@ -274,7 +277,9 @@ function SolicitudesPrestamo() {
             setModoSeleccion("individual");
             setListaSeleccionadaId("");
             setAvisoLista("");
-            setMensaje("Tu solicitud fue enviada a Almacén para revisión.");
+            setMensaje(administrador
+                ? "La solicitud se registró. Completa el checklist y apruébala para registrar el préstamo."
+                : "Tu solicitud fue enviada a Almacén para revisión.");
             setFormularioAbierto(false);
             setSolicitudesAbiertas(true);
             await cargarDatos();
@@ -679,7 +684,11 @@ function SolicitudesPrestamo() {
                             >
                                 <div className="card-header">
                                     <h2>Nueva solicitud</h2>
-                                    <p>El préstamo solo se registra cuando Administración lo aprueba.</p>
+                                    <p>
+                                        {administrador
+                                            ? "Completa el checklist y aprueba la solicitud para registrar el préstamo."
+                                            : "El préstamo solo se registra cuando Administración o Almacén lo aprueba."}
+                                    </p>
                                 </div>
                                 <div className="form-grid">
                             <div className="form-group">
@@ -984,7 +993,7 @@ function SolicitudesPrestamo() {
                                     {puedeAprobar
                                         ? "Las solicitudes deben tener checklist completo antes de aprobarse."
                                         : puedeRevisar
-                                            ? "Completa el checklist y descarga el PDF antes de que Administración apruebe."
+                                            ? "Completa el checklist y descarga el PDF antes de la aprobación."
                                             : "El estado cambiará cuando Almacén revise tu solicitud."}
                                 </p>
                             </div>
@@ -1181,23 +1190,25 @@ function SolicitudesPrestamo() {
 
                                     {puedeAprobar && ["PENDIENTE", "REVISADA"].includes(solicitud.estado) && (
                                         <div className="request-actions">
-                                            <div className="form-group">
-                                                <label htmlFor={`rechazo-${solicitud.id}`}>
-                                                    Motivo del rechazo (requerido para rechazar)
-                                                </label>
-                                                <textarea
-                                                    id={`rechazo-${solicitud.id}`}
-                                                    value={rechazos[solicitud.id] ?? ""}
-                                                    onChange={(event) => setRechazos((actuales) => ({
-                                                        ...actuales,
-                                                        [solicitud.id]: event.target.value,
-                                                    }))}
-                                                    rows={2}
-                                                />
-                                            </div>
+                                            {puedeRechazar && (
+                                                <div className="form-group">
+                                                    <label htmlFor={`rechazo-${solicitud.id}`}>
+                                                        Motivo del rechazo (requerido para rechazar)
+                                                    </label>
+                                                    <textarea
+                                                        id={`rechazo-${solicitud.id}`}
+                                                        value={rechazos[solicitud.id] ?? ""}
+                                                        onChange={(event) => setRechazos((actuales) => ({
+                                                            ...actuales,
+                                                            [solicitud.id]: event.target.value,
+                                                        }))}
+                                                        rows={2}
+                                                    />
+                                                </div>
+                                            )}
                                             {solicitud.estado !== "REVISADA" && (
                                                 <p className="form-hint">
-                                                    Almacén debe completar el checklist antes de aprobar.
+                                                    Completa el checklist antes de aprobar.
                                                 </p>
                                             )}
                                             {solicitud.activos.some(
@@ -1235,17 +1246,19 @@ function SolicitudesPrestamo() {
                                                 >
                                                     {resolviendoId === solicitud.id ? "Procesando..." : "Aprobar y registrar préstamo"}
                                                 </button>
-                                                <button
-                                                    className="btn btn-secondary"
-                                                    type="button"
-                                                    disabled={
-                                                        resolviendoId !== null
-                                                        || eliminandoId !== null
-                                                    }
-                                                    onClick={() => resolverSolicitud(solicitud, "rechazar")}
-                                                >
-                                                    Rechazar solicitud
-                                                </button>
+                                                {puedeRechazar && (
+                                                    <button
+                                                        className="btn btn-secondary"
+                                                        type="button"
+                                                        disabled={
+                                                            resolviendoId !== null
+                                                            || eliminandoId !== null
+                                                        }
+                                                        onClick={() => resolverSolicitud(solicitud, "rechazar")}
+                                                    >
+                                                        Rechazar solicitud
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     )}

@@ -191,6 +191,44 @@ describe("Solicitudes de préstamo", () => {
         })).toHaveAttribute("aria-expanded", "true");
     });
 
+    it("permite al administrador crear una solicitud para luego revisarla y aprobarla", async () => {
+        prepararRespuestas();
+        const user = userEvent.setup();
+        renderPage(true);
+
+        await user.click(await screen.findByRole("button", {
+            name: "Nueva solicitud",
+        }));
+        await user.type(screen.getByLabelText("Cliente"), "Acme Industrial");
+        await user.type(screen.getByLabelText("Consecutivo del servicio"), "OS-1003");
+        await user.type(
+            screen.getByLabelText("Nombre del colaborador"),
+            "Administración",
+        );
+        await user.type(screen.getByLabelText("Documento"), "123456");
+        await user.type(
+            screen.getByLabelText("¿Para qué necesitas los activos?"),
+            "Trabajo en planta",
+        );
+        await user.click(screen.getByLabelText(/PC-008 — Portátil de pruebas/));
+        await user.click(screen.getByRole("button", { name: "Enviar solicitud" }));
+
+        await waitFor(() => {
+            expect(api.post).toHaveBeenCalledWith(
+                "/movimientos/solicitudes-prestamo/",
+                expect.objectContaining({
+                    cliente: "Acme Industrial",
+                    consecutivo: "OS-1003",
+                    nombre_receptor: "Administración",
+                    activos: [8],
+                }),
+            );
+        });
+        expect(await screen.findByRole("status")).toHaveTextContent(
+            "La solicitud se registró. Completa el checklist y apruébala para registrar el préstamo.",
+        );
+    });
+
     it("preselecciona los activos disponibles de una lista y permite agregar otros", async () => {
         prepararRespuestas(
             [],
@@ -340,6 +378,39 @@ describe("Solicitudes de préstamo", () => {
         })).not.toBeInTheDocument();
     });
 
+    it("permite a Almacén aprobar solicitudes revisadas", async () => {
+        prepararRespuestas([{
+            ...solicitud,
+            estado: "REVISADA",
+            estado_nombre: "Revisada",
+            activos: [{
+                ...solicitud.activos[0],
+                condicion: "BUENO",
+                incluir_en_salida: true,
+            }],
+        }]);
+        const user = userEvent.setup();
+        renderPage(false, {
+            puede_ver_movimientos: false,
+            puede_revisar_solicitudes_prestamo: true,
+        });
+
+        await abrirSolicitudes(user, "Solicitudes por aprobar");
+        await user.click(await screen.findByRole("button", {
+            name: "Aprobar y registrar préstamo",
+        }));
+
+        await waitFor(() => {
+            expect(api.post).toHaveBeenCalledWith(
+                "/movimientos/solicitudes-prestamo/12/aprobar/",
+                {},
+            );
+        });
+        expect(screen.queryByRole("button", {
+            name: "Rechazar solicitud",
+        })).not.toBeInTheDocument();
+    });
+
     it("permite a Almacén completar el checklist y generar el PDF previo", async () => {
         prepararRespuestas([solicitud]);
         const user = userEvent.setup();
@@ -348,7 +419,7 @@ describe("Solicitudes de préstamo", () => {
             puede_revisar_solicitudes_prestamo: true,
         });
 
-        await abrirSolicitudes(user, "Solicitudes para revisar");
+        await abrirSolicitudes(user, "Solicitudes por aprobar");
         const estado = await screen.findByLabelText("Estado físico PC-008");
         expect(estado).toHaveValue("BUENO");
         await user.click(screen.getByRole("button", {
@@ -422,7 +493,7 @@ describe("Solicitudes de préstamo", () => {
             puede_revisar_solicitudes_prestamo: true,
         });
 
-        await abrirSolicitudes(user, "Solicitudes para revisar");
+        await abrirSolicitudes(user, "Solicitudes por aprobar");
         await screen.findByText("SOLICITUD #12");
         expect(screen.getByRole("button", {
             name: "Guardar checklist y generar PDF previo",

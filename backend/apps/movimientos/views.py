@@ -210,7 +210,7 @@ class SolicitudPrestamoViewSet(viewsets.ModelViewSet):
             )
             if solicitud.estado != SolicitudPrestamo.Estado.REVISADA:
                 raise serializers.ValidationError({
-                    "estado": "Almacén debe revisar la solicitud antes de aprobarla."
+                    "estado": "Completa el checklist antes de aprobar la solicitud."
                 })
 
             revisiones = list(
