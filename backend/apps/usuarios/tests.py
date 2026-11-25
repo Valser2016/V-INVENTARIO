@@ -16,11 +16,13 @@ class AdministracionUsuariosTests(APITestCase):
         self.admin = User.objects.create_user(
             username="admin-api",
             password="AdminPassword123!",
+            documento="87654321",
             rol=self.rol_admin,
         )
         self.usuario = User.objects.create_user(
             username="consulta-api",
             password="UserPassword123!",
+            documento="12345678",
             rol=self.rol_inventario,
         )
 
@@ -33,7 +35,7 @@ class AdministracionUsuariosTests(APITestCase):
                 "username": "nuevo-usuario",
                 "first_name": "Nuevo",
                 "last_name": "Usuario",
-                "documento": "12345678",
+                "documento": "23456789",
                 "rol": self.rol_inventario.pk,
                 "password": "xY7#sP4!uQ9",
             },
@@ -109,6 +111,7 @@ class AdministracionUsuariosTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(response.data["es_administrador"])
+        self.assertEqual(response.data["documento"], "12345678")
         self.assertTrue(response.data["permisos"]["puede_ver_movimientos"])
         self.assertFalse(response.data["permisos"]["puede_ver_reportes"])
         self.assertTrue(
