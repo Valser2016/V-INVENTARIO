@@ -16,6 +16,8 @@ from .views import (
     CategoriaActivoConfiguracionViewSet,
     EstadoActivoConfiguracionViewSet,
     UbicacionConfiguracionViewSet,
+    ImportarActivosView,
+    PlantillaImportacionActivosView,
 )
 
 
@@ -42,6 +44,18 @@ router.register(
 )
 
 urlpatterns = [
+
+    path(
+        "activos/plantilla-importacion/",
+        PlantillaImportacionActivosView.as_view(),
+        name="levantamiento-plantilla-importacion-activos",
+    ),
+
+    path(
+        "activos/importar/",
+        ImportarActivosView.as_view(),
+        name="levantamiento-importar-activos",
+    ),
 
     path(
         "tipos/",

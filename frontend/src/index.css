@@ -357,6 +357,74 @@ a {
     line-height: 1.65;
 }
 
+.inventory-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.import-assets-backdrop {
+    position: fixed;
+    z-index: 70;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
+    background: rgba(25, 35, 25, 0.65);
+}
+
+.import-assets-dialog {
+    display: grid;
+    width: min(760px, 100%);
+    max-height: calc(100vh - 40px);
+    gap: 14px;
+    padding: 24px;
+    overflow-y: auto;
+}
+
+.import-assets-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.import-assets-heading h2 {
+    margin: 7px 0 0;
+    color: var(--ink);
+    font-family: "Manrope", sans-serif;
+    font-size: 21px;
+}
+
+.import-assets-dialog > p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.import-assets-form {
+    display: grid;
+    gap: 14px;
+}
+
+.import-assets-dialog .alert {
+    display: block;
+    margin: 0;
+}
+
+.import-assets-dialog .alert ul {
+    margin: 8px 0 0;
+    padding-left: 20px;
+}
+
+.import-assets-dialog .alert li + li {
+    margin-top: 5px;
+}
+
 .eyebrow {
     display: inline-block;
     color: var(--brand-green-dark);

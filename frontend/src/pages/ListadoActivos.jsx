@@ -78,6 +78,14 @@ function ListadoActivos() {
     const [guardando, setGuardando] = useState(false);
     const [descargandoHoja, setDescargandoHoja] = useState(false);
     const [activosQrPorImprimir, setActivosQrPorImprimir] = useState([]);
+    const [importacionAbierta, setImportacionAbierta] = useState(false);
+    const [descargandoPlantilla, setDescargandoPlantilla] = useState(false);
+    const [archivoImportacion, setArchivoImportacion] = useState(null);
+    const [fotosImportacion, setFotosImportacion] = useState(null);
+    const [importando, setImportando] = useState(false);
+    const [errorImportacion, setErrorImportacion] = useState("");
+    const [erroresImportacion, setErroresImportacion] = useState([]);
+    const [versionListado, setVersionListado] = useState(0);
 
     useEffect(() => {
         let cancelado = false;
@@ -115,7 +123,7 @@ function ListadoActivos() {
         return () => {
             cancelado = true;
         };
-    }, [filtros, numeroPagina]);
+    }, [filtros, numeroPagina, versionListado]);
 
     useEffect(() => {
         let cancelado = false;
@@ -348,6 +356,79 @@ function ListadoActivos() {
         window.print();
     };
 
+    const descargarPlantillaImportacion = async () => {
+        setErrorImportacion("");
+        setDescargandoPlantilla(true);
+        try {
+            const response = await api.get(
+                "/levantamiento/activos/plantilla-importacion/",
+                { responseType: "blob" },
+            );
+            const objectUrl = URL.createObjectURL(response.data);
+            const enlace = document.createElement("a");
+            enlace.href = objectUrl;
+            enlace.download = "plantilla_activos_masivos.xlsx";
+            document.body.appendChild(enlace);
+            enlace.click();
+            enlace.remove();
+            window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+        } catch (requestError) {
+            console.error("Error descargando plantilla de activos:", requestError);
+            setErrorImportacion(
+                "No fue posible descargar la plantilla de importación.",
+            );
+        } finally {
+            setDescargandoPlantilla(false);
+        }
+    };
+
+    const importarActivos = async (event) => {
+        event.preventDefault();
+        if (!archivoImportacion) {
+            setErrorImportacion("Selecciona el archivo Excel que deseas importar.");
+            return;
+        }
+
+        const datos = new FormData();
+        datos.append("archivo", archivoImportacion);
+        if (fotosImportacion) {
+            datos.append("fotos", fotosImportacion);
+        }
+
+        setImportando(true);
+        setErrorImportacion("");
+        setErroresImportacion([]);
+        setMensaje("");
+        try {
+            const response = await api.post(
+                "/levantamiento/activos/importar/",
+                datos,
+            );
+            const { creados, fotos_cargadas: fotosCargadas } = response.data;
+            const resumenFotos = fotosCargadas === 1
+                ? "1 foto"
+                : `${fotosCargadas} fotos`;
+            setMensaje(
+                `Se importaron ${creados} activos y ${resumenFotos} correctamente.`,
+            );
+            setImportacionAbierta(false);
+            setArchivoImportacion(null);
+            setFotosImportacion(null);
+            setNumeroPagina(1);
+            setVersionListado((version) => version + 1);
+        } catch (requestError) {
+            console.error("Error importando activos:", requestError);
+            const respuesta = requestError.response?.data;
+            setErrorImportacion(
+                respuesta?.detail
+                ?? "No fue posible importar los activos. Revisa los archivos e intenta de nuevo.",
+            );
+            setErroresImportacion(respuesta?.errores ?? []);
+        } finally {
+            setImportando(false);
+        }
+    };
+
     const imprimirQrsPagina = () => {
         const activosPagina = pagina?.results ?? [];
         if (!activosPagina.length) {
@@ -426,15 +507,151 @@ function ListadoActivos() {
                 <span className="record-count">
                     {pagina ? `${pagina.count} registros` : "Inventario"}
                 </span>
-                <button
-                    className="btn btn-secondary"
-                    type="button"
-                    disabled={!pagina?.results?.length || cargando}
-                    onClick={imprimirQrsPagina}
-                >
-                    Imprimir QRs de esta página ({pagina?.results?.length ?? 0})
-                </button>
+                <div className="inventory-header-actions">
+                    {puedeModificar && (
+                        <button
+                            className="btn btn-primary"
+                            type="button"
+                            onClick={() => {
+                                setErrorImportacion("");
+                                setErroresImportacion([]);
+                                setImportacionAbierta(true);
+                            }}
+                        >
+                            Importar desde Excel
+                        </button>
+                    )}
+                    <button
+                        className="btn btn-secondary"
+                        type="button"
+                        disabled={!pagina?.results?.length || cargando}
+                        onClick={imprimirQrsPagina}
+                    >
+                        Imprimir QRs de esta página ({pagina?.results?.length ?? 0})
+                    </button>
+                </div>
             </header>
+
+            {importacionAbierta && (
+                <div className="import-assets-backdrop">
+                    <section
+                        className="card import-assets-dialog"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="import-assets-title"
+                    >
+                        <div className="import-assets-heading">
+                            <div>
+                                <span className="eyebrow">CARGA MASIVA</span>
+                                <h2 id="import-assets-title">Importar activos desde Excel</h2>
+                            </div>
+                            <button
+                                className="btn btn-secondary"
+                                type="button"
+                                disabled={importando}
+                                onClick={() => setImportacionAbierta(false)}
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+                        <p>
+                            Descarga la plantilla, completa una fila por activo y
+                            adjunta opcionalmente un ZIP de fotos. Los nombres de las
+                            imágenes deben coincidir con la columna FOTO_ARCHIVO.
+                        </p>
+                        <button
+                            className="btn btn-secondary"
+                            type="button"
+                            disabled={descargandoPlantilla}
+                            onClick={descargarPlantillaImportacion}
+                        >
+                            {descargandoPlantilla
+                                ? "Descargando plantilla..."
+                                : "Descargar plantilla Excel"}
+                        </button>
+                        <p className="form-hint">
+                            El Excel no puede superar 20 MB.
+                            El ZIP debe contener solo las fotos JPG, PNG o WEBP
+                            referenciadas en el Excel, directamente en su raíz.
+                            Máximo 10 MB por foto y 100 MB en total. Si alguna fila
+                            tiene errores, no se importará ningún activo.
+                        </p>
+                        <form className="import-assets-form" onSubmit={importarActivos}>
+                            <div className="form-group">
+                                <label htmlFor="archivo-importacion-activos">
+                                    Archivo Excel (.xlsx)
+                                </label>
+                                <input
+                                    id="archivo-importacion-activos"
+                                    type="file"
+                                    accept=".xlsx"
+                                    onChange={(event) => {
+                                        setArchivoImportacion(
+                                            event.target.files?.[0] ?? null,
+                                        );
+                                        setErrorImportacion("");
+                                        setErroresImportacion([]);
+                                    }}
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label htmlFor="fotos-importacion-activos">
+                                    ZIP de fotos (opcional)
+                                </label>
+                                <input
+                                    id="fotos-importacion-activos"
+                                    type="file"
+                                    accept=".zip,application/zip"
+                                    onChange={(event) => {
+                                        setFotosImportacion(
+                                            event.target.files?.[0] ?? null,
+                                        );
+                                        setErrorImportacion("");
+                                        setErroresImportacion([]);
+                                    }}
+                                />
+                            </div>
+                            {errorImportacion && (
+                                <div className="alert alert-error" role="alert">
+                                    {errorImportacion}
+                                    {erroresImportacion.length > 0 && (
+                                        <ul>
+                                            {erroresImportacion.map((errorFila, indice) => (
+                                                <li key={`${errorFila.fila}-${indice}`}>
+                                                    {errorFila.fila
+                                                        ? `Fila ${errorFila.fila}: `
+                                                        : ""}
+                                                    {errorFila.campo
+                                                        ? `${errorFila.campo}: `
+                                                        : ""}
+                                                    {(errorFila.mensajes ?? []).join(" ")}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                            )}
+                            <div className="form-actions">
+                                <button
+                                    className="btn btn-secondary"
+                                    type="button"
+                                    disabled={importando}
+                                    onClick={() => setImportacionAbierta(false)}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    className="btn btn-primary"
+                                    type="submit"
+                                    disabled={importando || !archivoImportacion}
+                                >
+                                    {importando ? "Validando e importando..." : "Importar activos"}
+                                </button>
+                            </div>
+                        </form>
+                    </section>
+                </div>
+            )}
 
             {activosQrPorImprimir.length > 0 && (
                 <div className="inventory-qr-print">

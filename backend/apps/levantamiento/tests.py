@@ -3,6 +3,7 @@ from io import BytesIO
 import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
+from zipfile import ZipFile
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -31,7 +32,10 @@ from apps.levantamiento.services.hoja_vida_excel import (
     _marcador_columna,
     _marcador_fila,
 )
-from apps.levantamiento.services.importador_excel import validar_excel
+from apps.levantamiento.services.importador_excel import (
+    COLUMNAS_PLANTILLA,
+    validar_excel,
+)
 
 User = get_user_model()
 
@@ -207,6 +211,197 @@ class InventarioTests(APITestCase):
             nombre="Oficina Central",
         )
         self.client.force_authenticate(user=self.user)
+
+    def _crear_excel_importacion(self, filas):
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.title = "Activos"
+        worksheet.append(COLUMNAS_PLANTILLA)
+        for datos in filas:
+            worksheet.append([
+                datos.get(columna, "")
+                for columna in COLUMNAS_PLANTILLA
+            ])
+        contenido = BytesIO()
+        workbook.save(contenido)
+        workbook.close()
+        return SimpleUploadedFile(
+            "activos.xlsx",
+            contenido.getvalue(),
+            content_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+        )
+
+    def _fila_importacion(self, **cambios):
+        fila = {
+            "TIPO_ACTIVO": "Computador",
+            "CATEGORIA": "Portátil",
+            "MODALIDAD": "Individual",
+            "NOMBRE": "Laptop importada",
+            "SERIE_CODIGO": "",
+            "FECHA_ADQUISICION": "",
+            "UBICACION": "Oficina Central",
+            "ESTADO": "Disponible",
+            "RESPONSABLE": "",
+            "CUENTA_CON_MANUAL": "No",
+            "VALOR": "",
+            "FOTO_ARCHIVO": "",
+        }
+        fila.update(cambios)
+        return fila
+
+    def test_importa_varios_activos_y_genera_codigos_internos(self):
+        archivo = self._crear_excel_importacion([
+            self._fila_importacion(NOMBRE="Laptop uno", SERIE_CODIGO="SERIE-001"),
+            self._fila_importacion(NOMBRE="Laptop dos", SERIE_CODIGO="SERIE-002"),
+        ])
+
+        respuesta = self.client.post(
+            reverse("levantamiento-importar-activos"),
+            {"archivo": archivo},
+            format="multipart",
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(respuesta.data["creados"], 2)
+        self.assertEqual(respuesta.data["codigos"], ["PC-001", "PC-002"])
+        self.assertEqual(
+            list(Activo.objects.order_by("codigo_interno").values_list(
+                "creado_por_id",
+                flat=True,
+            )),
+            [self.user.id, self.user.id],
+        )
+
+    def test_importacion_invalida_no_crea_parcialmente_los_activos(self):
+        archivo = self._crear_excel_importacion([
+            self._fila_importacion(NOMBRE="Laptop válida"),
+            self._fila_importacion(
+                NOMBRE="Laptop inválida",
+                CATEGORIA="Categoría inexistente",
+            ),
+        ])
+
+        respuesta = self.client.post(
+            reverse("levantamiento-importar-activos"),
+            {"archivo": archivo},
+            format="multipart",
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Activo.objects.count(), 0)
+        self.assertTrue(any(
+            error["fila"] == 3
+            for error in respuesta.data["errores"]
+        ))
+
+    def test_importacion_rechaza_series_repetidas_en_el_mismo_archivo(self):
+        archivo = self._crear_excel_importacion([
+            self._fila_importacion(SERIE_CODIGO="SERIE-DUPLICADA"),
+            self._fila_importacion(
+                NOMBRE="Segundo equipo",
+                SERIE_CODIGO="serie-duplicada",
+            ),
+        ])
+
+        respuesta = self.client.post(
+            reverse("levantamiento-importar-activos"),
+            {"archivo": archivo},
+            format="multipart",
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Activo.objects.count(), 0)
+        self.assertIn(
+            "ya existe en el inventario",
+            respuesta.data["errores"][0]["mensajes"][0],
+        )
+
+    def test_importacion_asocia_foto_desde_zip(self):
+        imagen = BytesIO()
+        Image.new("RGB", (4, 4), color="blue").save(imagen, format="PNG")
+        zip_contenido = BytesIO()
+        with ZipFile(zip_contenido, "w") as archivo_zip:
+            archivo_zip.writestr("PC-001.png", imagen.getvalue())
+        archivo = self._crear_excel_importacion([
+            self._fila_importacion(FOTO_ARCHIVO="PC-001.png"),
+        ])
+        zip_fotos = SimpleUploadedFile(
+            "fotos.zip",
+            zip_contenido.getvalue(),
+            content_type="application/zip",
+        )
+
+        with TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                respuesta = self.client.post(
+                    reverse("levantamiento-importar-activos"),
+                    {"archivo": archivo, "fotos": zip_fotos},
+                    format="multipart",
+                )
+                self.assertEqual(respuesta.status_code, status.HTTP_201_CREATED)
+                self.assertEqual(respuesta.data["fotos_cargadas"], 1)
+                activo = Activo.objects.get()
+                self.assertTrue(activo.foto.name.startswith("activos/"))
+                self.assertTrue(os.path.exists(activo.foto.path))
+
+    def test_foto_referenciada_sin_zip_no_importa_activos(self):
+        archivo = self._crear_excel_importacion([
+            self._fila_importacion(FOTO_ARCHIVO="PC-001.png"),
+        ])
+
+        respuesta = self.client.post(
+            reverse("levantamiento-importar-activos"),
+            {"archivo": archivo},
+            format="multipart",
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Activo.objects.count(), 0)
+        self.assertIn("ZIP de fotos", respuesta.data["errores"][0]["mensajes"][0])
+
+    def test_usuario_sin_permiso_no_puede_importar_activos(self):
+        rol_consulta, _ = Rol.objects.get_or_create(nombre="Consulta")
+        usuario = User.objects.create_user(
+            username="usuario-lectura",
+            rol=rol_consulta,
+        )
+        self.client.force_authenticate(user=usuario)
+
+        respuesta = self.client.post(
+            reverse("levantamiento-importar-activos"),
+            {"archivo": self._crear_excel_importacion([
+                self._fila_importacion(),
+            ])},
+            format="multipart",
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(Activo.objects.count(), 0)
+
+    def test_descarga_plantilla_incluye_columnas_y_catalogos(self):
+        respuesta = self.client.get(
+            reverse("levantamiento-plantilla-importacion-activos"),
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_200_OK)
+        workbook = load_workbook(BytesIO(respuesta.content), read_only=True)
+        self.assertEqual(workbook.sheetnames, [
+            "Activos",
+            "Catalogos",
+            "Instrucciones",
+        ])
+        self.assertEqual(
+            list(next(workbook["Activos"].iter_rows(values_only=True))),
+            COLUMNAS_PLANTILLA,
+        )
+        self.assertIn(
+            "Portátil",
+            list(workbook["Catalogos"].values)[1],
+        )
+        workbook.close()
 
     def test_lista_filtra_en_servidor_por_texto_y_catalogos(self):
         herramienta = Activo.objects.create(

@@ -1,4 +1,5 @@
-from datetime import datetime
+from collections import defaultdict
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from openpyxl import load_workbook
@@ -31,6 +32,8 @@ COLUMNAS_ESPERADAS = [
     "VALOR",
     "OBSERVACIONES",
 ]
+COLUMNAS_OPCIONALES = ["FOTO_ARCHIVO"]
+COLUMNAS_PLANTILLA = COLUMNAS_ESPERADAS + COLUMNAS_OPCIONALES
 
 
 def texto(valor):
@@ -43,7 +46,33 @@ def texto(valor):
 
 def normalizar(valor):
     """Normaliza texto para comparaciones."""
-    return texto(valor).lower().strip()
+    return texto(valor).casefold().strip()
+
+
+def _convertir_valor(valor):
+    texto_valor = str(valor).strip()
+    if "," in texto_valor and "." in texto_valor:
+        if texto_valor.rfind(",") > texto_valor.rfind("."):
+            texto_valor = texto_valor.replace(".", "").replace(",", ".")
+        else:
+            texto_valor = texto_valor.replace(",", "")
+    elif "," in texto_valor:
+        texto_valor = texto_valor.replace(",", ".")
+    return Decimal(texto_valor)
+
+
+def _convertir_fecha(valor):
+    if isinstance(valor, datetime):
+        return valor.date()
+    if isinstance(valor, date):
+        return valor
+    if isinstance(valor, str):
+        for formato in ("%Y-%m-%d", "%d/%m/%Y"):
+            try:
+                return datetime.strptime(valor.strip(), formato).date()
+            except ValueError:
+                continue
+    raise ValueError("La fecha no tiene un formato válido.")
 
 
 def validar_excel(ruta_archivo):
@@ -110,6 +139,7 @@ def validar_excel(ruta_archivo):
             ],
         })
 
+        workbook.close()
         return resultado
 
     encabezados = [
@@ -150,12 +180,47 @@ def validar_excel(ruta_archivo):
 
     indices = {
         columna: encabezados.index(columna)
-        for columna in COLUMNAS_ESPERADAS
+        for columna in COLUMNAS_PLANTILLA
+        if columna in encabezados
+    }
+    tipos_por_nombre = {
+        normalizar(tipo.nombre): tipo
+        for tipo in TipoActivo.objects.filter(activo=True)
+    }
+    categorias_por_nombre = defaultdict(list)
+    for categoria in (
+        CategoriaActivo.objects.filter(activo=True)
+        .select_related("tipo_activo")
+    ):
+        categorias_por_nombre[normalizar(categoria.nombre)].append(categoria)
+    estados_por_nombre = {
+        normalizar(estado.nombre): estado
+        for estado in EstadoActivo.objects.filter(activo=True)
+    }
+    ubicaciones_por_nombre = {
+        normalizar(ubicacion.nombre): ubicacion
+        for ubicacion in Ubicacion.objects.filter(activo=True)
+    }
+    usuarios_por_username = {}
+    usuarios_por_nombre = defaultdict(list)
+    for usuario in Usuario.objects.filter(is_active=True):
+        usuarios_por_username[normalizar(usuario.username)] = usuario
+        nombre_completo = " ".join(
+            f"{usuario.first_name} {usuario.last_name}".split()
+        )
+        if nombre_completo:
+            usuarios_por_nombre[normalizar(nombre_completo)].append(usuario)
+    series_existentes = {
+        serie.casefold()
+        for serie in Activo.objects.values_list("serie_codigo", flat=True)
+        if serie
     }
 
     # -------------------------------------------------
     # RECORRER FILAS
     # -------------------------------------------------
+
+    series_importadas = set()
 
     for numero_fila, fila in enumerate(filas, start=2):
 
@@ -177,10 +242,10 @@ def validar_excel(ruta_archivo):
         datos = {
             columna: (
                 fila[indices[columna]]
-                if indices[columna] < len(fila)
+                if columna in indices and indices[columna] < len(fila)
                 else None
             )
-            for columna in COLUMNAS_ESPERADAS
+            for columna in COLUMNAS_PLANTILLA
         }
 
         # -------------------------------------------------
@@ -199,14 +264,7 @@ def validar_excel(ruta_archivo):
 
         else:
 
-            tipo_activo = (
-                TipoActivo.objects
-                .filter(
-                    activo=True,
-                    nombre__iexact=nombre_tipo,
-                )
-                .first()
-            )
+            tipo_activo = tipos_por_nombre.get(normalizar(nombre_tipo))
 
             if not tipo_activo:
 
@@ -230,13 +288,18 @@ def validar_excel(ruta_archivo):
 
         else:
 
-            categoria = (
-                CategoriaActivo.objects
-                .filter(
-                    activo=True,
-                    nombre__iexact=nombre_categoria,
-                )
-                .first()
+            categorias_posibles = categorias_por_nombre.get(
+                normalizar(nombre_categoria),
+                [],
+            )
+            categoria = next(
+                (
+                    opcion
+                    for opcion in categorias_posibles
+                    if not tipo_activo
+                    or opcion.tipo_activo_id == tipo_activo.id
+                ),
+                categorias_posibles[0] if categorias_posibles else None,
             )
 
             if not categoria:
@@ -263,7 +326,7 @@ def validar_excel(ruta_archivo):
         # MODALIDAD
         # -------------------------------------------------
 
-        modalidad = normalizar(datos["MODALIDAD"])
+        modalidad = normalizar(datos["MODALIDAD"]) or "individual"
 
         modalidades_validas = {
             "individual": "INDIVIDUAL",
@@ -310,13 +373,8 @@ def validar_excel(ruta_archivo):
 
         else:
 
-            ubicacion = (
-                Ubicacion.objects
-                .filter(
-                    activo=True,
-                    nombre__iexact=nombre_ubicacion,
-                )
-                .first()
+            ubicacion = ubicaciones_por_nombre.get(
+                normalizar(nombre_ubicacion),
             )
 
             if not ubicacion:
@@ -341,14 +399,7 @@ def validar_excel(ruta_archivo):
 
         else:
 
-            estado = (
-                EstadoActivo.objects
-                .filter(
-                    activo=True,
-                    nombre__iexact=nombre_estado,
-                )
-                .first()
-            )
+            estado = estados_por_nombre.get(normalizar(nombre_estado))
 
             if not estado:
 
@@ -369,46 +420,34 @@ def validar_excel(ruta_archivo):
         if nombre_responsable:
 
             # Intentar primero por username
-            responsable = (
-                Usuario.objects
-                .filter(
-                    is_active=True,
-                    username__iexact=nombre_responsable,
-                )
-                .first()
+            responsable = usuarios_por_username.get(
+                normalizar(nombre_responsable),
             )
 
-            # Si no existe, intentar por nombre completo
             if not responsable:
-
-                partes = nombre_responsable.split()
-
-                if len(partes) >= 2:
-
-                    responsable = (
-                        Usuario.objects
-                        .filter(
-                            is_active=True,
-                            first_name__iexact=partes[0],
-                            last_name__iexact=" ".join(partes[1:]),
-                        )
-                        .first()
+                candidatos = usuarios_por_nombre.get(
+                    normalizar(nombre_responsable),
+                    [],
+                )
+                if len(candidatos) == 1:
+                    responsable = candidatos[0]
+                elif len(candidatos) > 1:
+                    errores_fila.append(
+                        f'El responsable "{nombre_responsable}" es ambiguo; '
+                        "indica su nombre de usuario."
+                    )
+                else:
+                    errores_fila.append(
+                        f'No se encontró el responsable '
+                        f'"{nombre_responsable}".'
                     )
 
-            if not responsable:
-
-                errores_fila.append(
-                    f'No se encontró el responsable '
-                    f'"{nombre_responsable}".'
-                )
 
         # -------------------------------------------------
         # MANUAL
         # -------------------------------------------------
 
-        manual = normalizar(
-            datos["CUENTA_CON_MANUAL"]
-        )
+        manual = normalizar(datos["CUENTA_CON_MANUAL"])
 
         valores_manual = {
             "si": True,
@@ -416,12 +455,17 @@ def validar_excel(ruta_archivo):
             "s": True,
             "yes": True,
             "1": True,
+            "true": True,
             "no": False,
             "n": False,
             "0": False,
+            "false": False,
         }
 
-        if manual not in valores_manual:
+        if not manual:
+            cuenta_con_manual = False
+
+        elif manual not in valores_manual:
 
             errores_fila.append(
                 'CUENTA_CON_MANUAL debe ser "Sí" o "No".'
@@ -447,14 +491,20 @@ def validar_excel(ruta_archivo):
 
             try:
 
-                valor_decimal = Decimal(
-                    str(valor).replace(",", "")
-                )
+                valor_decimal = _convertir_valor(valor)
 
                 if valor_decimal < 0:
 
                     errores_fila.append(
                         "VALOR no puede ser negativo."
+                    )
+                elif valor_decimal >= Decimal("10000000000000"):
+                    errores_fila.append(
+                        "VALOR admite máximo 13 dígitos enteros."
+                    )
+                elif valor_decimal != valor_decimal.quantize(Decimal("0.01")):
+                    errores_fila.append(
+                        "VALOR admite máximo 2 decimales."
                     )
 
             except (
@@ -477,25 +527,13 @@ def validar_excel(ruta_archivo):
         ]
 
         if fecha_adquisicion not in (None, ""):
-
-            if isinstance(
-                fecha_adquisicion,
-                datetime,
-            ):
-
-                fecha_adquisicion = (
-                    fecha_adquisicion.date()
-                )
-
-            elif not hasattr(
-                fecha_adquisicion,
-                "year",
-            ):
-
+            try:
+                fecha_adquisicion = _convertir_fecha(fecha_adquisicion)
+            except ValueError:
                 errores_fila.append(
-                    "FECHA_ADQUISICION no tiene "
-                    "un formato válido."
+                    "FECHA_ADQUISICION debe usar AAAA-MM-DD o DD/MM/AAAA."
                 )
+                fecha_adquisicion = None
 
         # -------------------------------------------------
         # SERIE / CODIGO
@@ -505,23 +543,34 @@ def validar_excel(ruta_archivo):
             datos["SERIE_CODIGO"]
         )
 
+        limites = {
+            "NOMBRE": (datos["NOMBRE"], 200),
+            "MARCA": (datos["MARCA"], 100),
+            "MODELO": (datos["MODELO"], 100),
+            "SERIE_CODIGO": (datos["SERIE_CODIGO"], 150),
+            "PROVEEDOR": (datos["PROVEEDOR"], 200),
+            "VIDA_UTIL": (datos["VIDA_UTIL"], 100),
+        }
+        for campo, (valor_campo, longitud_maxima) in limites.items():
+            if len(texto(valor_campo)) > longitud_maxima:
+                errores_fila.append(
+                    f"{campo} supera el máximo de {longitud_maxima} caracteres."
+                )
+
         if serie_codigo:
 
-            existe = (
-                Activo.objects
-                .filter(
-                    serie_codigo__iexact=serie_codigo,
-                    activo=True,
-                )
-                .exists()
-            )
-
-            if existe:
+            serie_normalizada = serie_codigo.casefold()
+            if (
+                serie_normalizada in series_existentes
+                or serie_normalizada in series_importadas
+            ):
 
                 errores_fila.append(
                     f'La serie/código "{serie_codigo}" '
                     f'ya existe en el inventario.'
                 )
+            else:
+                series_importadas.add(serie_normalizada)
 
         # -------------------------------------------------
         # RESULTADO
@@ -584,8 +633,17 @@ def validar_excel(ruta_archivo):
                 "observaciones": texto(
                     datos["OBSERVACIONES"]
                 ),
+                "foto_archivo": texto(datos["FOTO_ARCHIVO"]),
             })
 
     workbook.close()
+
+    if resultado["total_filas"] == 0:
+        resultado["valido"] = False
+        resultado["errores"].append({
+            "fila": None,
+            "campo": None,
+            "mensajes": ["El archivo no contiene filas de activos."],
+        })
 
     return resultado

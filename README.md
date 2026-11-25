@@ -114,6 +114,22 @@ Administración asigna por separado los permisos de **Modificar inventario**,
 no puede administrar usuarios ni roles. Otros roles solo reciben las capacidades
 que se les asignen.
 
+## Carga masiva de activos
+
+En **Inventario**, los usuarios con permiso de modificación pueden elegir
+**Importar desde Excel** y descargar la plantilla. Completa una fila por activo;
+los tipos, categorías, estados y ubicaciones deben existir en los catálogos. La
+hoja **Catalogos** de la plantilla contiene los valores activos disponibles. El
+código interno se genera automáticamente según el prefijo de la categoría.
+
+La columna opcional `FOTO_ARCHIVO` permite asociar una imagen del ZIP opcional.
+Escribe el nombre exacto de cada archivo y guarda las imágenes JPG, PNG o WEBP
+directamente en la raíz del ZIP; incluye solo fotos referenciadas por la hoja.
+Cada foto puede pesar hasta 10 MB y el tamaño del ZIP y su contenido no pueden
+superar 100 MB. El Excel tiene un límite de 20 MB. Si se indica un nombre de foto,
+ese archivo debe estar incluido. La carga valida todas las filas e imágenes antes
+de guardar; ante cualquier error no se importa ningún activo.
+
 En **Inventario**, se pueden imprimir las etiquetas QR de la página actual o
 abrir la ficha de un activo e imprimir su etiqueta individual. Cada QR contiene
 el código interno del activo. Al crear una solicitud, **Leer QR con cámara**

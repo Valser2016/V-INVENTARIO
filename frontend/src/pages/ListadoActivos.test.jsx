@@ -10,6 +10,7 @@ import ListadoActivos from "./ListadoActivos";
 vi.mock("../services/api", () => ({
     default: {
         get: vi.fn(),
+        post: vi.fn(),
         patch: vi.fn(),
         delete: vi.fn(),
     },
@@ -86,6 +87,7 @@ const prepararRespuestas = () => {
 
 beforeEach(() => {
     vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset().mockResolvedValue({ data: {} });
     vi.mocked(api.patch).mockReset().mockResolvedValue({ data: {} });
     vi.mocked(api.delete).mockReset().mockResolvedValue({ data: {} });
 });
@@ -97,6 +99,73 @@ afterEach(() => {
 });
 
 describe("Edición de inventario", () => {
+    it("importa activos desde Excel y adjunta opcionalmente un ZIP de fotos", async () => {
+        prepararRespuestas();
+        vi.mocked(api.post).mockResolvedValue({
+            data: { creados: 2, fotos_cargadas: 1 },
+        });
+        const user = userEvent.setup();
+        renderPage();
+
+        await user.click(await screen.findByRole("button", {
+            name: "Importar desde Excel",
+        }));
+        const excel = new File(["excel"], "activos.xlsx", {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const zip = new File(["fotos"], "fotos.zip", {
+            type: "application/zip",
+        });
+        await user.upload(screen.getByLabelText("Archivo Excel (.xlsx)"), excel);
+        await user.upload(screen.getByLabelText("ZIP de fotos (opcional)"), zip);
+        await user.click(screen.getByRole("button", { name: "Importar activos" }));
+
+        await waitFor(() => {
+            expect(api.post).toHaveBeenCalledWith(
+                "/levantamiento/activos/importar/",
+                expect.any(FormData),
+            );
+        });
+        const formData = vi.mocked(api.post).mock.calls[0][1];
+        expect(formData.get("archivo")).toBe(excel);
+        expect(formData.get("fotos")).toBe(zip);
+        expect(await screen.findByRole("status")).toHaveTextContent(
+            "Se importaron 2 activos y 1 foto correctamente.",
+        );
+    });
+
+    it("muestra los errores de fila y no pierde la selección para corregir el Excel", async () => {
+        prepararRespuestas();
+        vi.mocked(api.post).mockRejectedValue({
+            response: {
+                data: {
+                    detail: "No se importó ningún activo.",
+                    errores: [{
+                        fila: 2,
+                        campo: "CATEGORIA",
+                        mensajes: ["La categoría no existe."],
+                    }],
+                },
+            },
+        });
+        const user = userEvent.setup();
+        renderPage();
+
+        await user.click(await screen.findByRole("button", {
+            name: "Importar desde Excel",
+        }));
+        await user.upload(
+            screen.getByLabelText("Archivo Excel (.xlsx)"),
+            new File(["excel"], "activos.xlsx", { type: "application/octet-stream" }),
+        );
+        await user.click(screen.getByRole("button", { name: "Importar activos" }));
+
+        expect(await screen.findByRole("alert")).toHaveTextContent(
+            "Fila 2: CATEGORIA: La categoría no existe.",
+        );
+        expect(screen.getByLabelText("Archivo Excel (.xlsx)").files).toHaveLength(1);
+    });
+
     it("filtra en cada cambio de la búsqueda y permite combinar filtros", async () => {
         prepararRespuestas();
         const user = userEvent.setup();
@@ -281,6 +350,9 @@ describe("Edición de inventario", () => {
         expect(screen.getByRole("button", { name: "Ver" })).toBeInTheDocument();
         expect(screen.queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
         expect(screen.queryByRole("button", { name: "Eliminar" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", {
+            name: "Importar desde Excel",
+        })).not.toBeInTheDocument();
     });
 
     it("muestra el motivo y conserva el activo si el servidor impide eliminarlo", async () => {

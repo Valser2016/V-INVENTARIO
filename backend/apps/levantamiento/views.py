@@ -1,9 +1,10 @@
 from PIL import Image, UnidentifiedImageError
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, Q
 from django.db.models.deletion import ProtectedError
 from rest_framework import generics, status, viewsets
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -36,6 +37,84 @@ from .serializers import (
     UbicacionConfiguracionSerializer,
 )
 from .services.hoja_vida_excel import crear_hoja_vida_excel
+from .services.importador_masivo import (
+    MAX_FOTOS_ZIP_BYTES,
+    importar_activos,
+)
+from .services.plantilla_importacion import crear_plantilla_importacion
+
+
+class PlantillaImportacionActivosView(APIView):
+    permission_classes = [PuedeConsultarYCrearActivos]
+
+    def get(self, _request):
+        archivo = crear_plantilla_importacion()
+        respuesta = HttpResponse(
+            archivo.getvalue(),
+            content_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+        )
+        respuesta["Content-Disposition"] = (
+            'attachment; filename="plantilla_activos_masivos.xlsx"'
+        )
+        return respuesta
+
+
+class ImportarActivosView(APIView):
+    permission_classes = [PuedeConsultarYCrearActivos]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        archivo = request.FILES.get("archivo")
+        fotos = request.FILES.get("fotos")
+        if not archivo:
+            return Response(
+                {"detail": "Adjunta la plantilla Excel con los activos."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not archivo.name.lower().endswith(".xlsx"):
+            return Response(
+                {"detail": "El archivo de activos debe tener formato .xlsx."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if archivo.size > 20 * 1024 * 1024:
+            return Response(
+                {"detail": "El archivo Excel no puede superar los 20 MB."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if fotos and not fotos.name.lower().endswith(".zip"):
+            return Response(
+                {"detail": "El archivo de fotos debe tener formato .zip."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if fotos and fotos.size > MAX_FOTOS_ZIP_BYTES:
+            return Response(
+                {"detail": "El archivo ZIP no puede superar los 100 MB."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        resultado = importar_activos(archivo, fotos, request.user)
+        if not resultado["valido"]:
+            return Response(
+                {
+                    "detail": (
+                        "No se importó ningún activo. Corrige los errores "
+                        "y vuelve a cargar el archivo."
+                    ),
+                    "errores": resultado["errores"],
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(
+            {
+                "creados": len(resultado["codigos"]),
+                "codigos": resultado["codigos"],
+                "fotos_cargadas": resultado["fotos_cargadas"],
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class TiposActivoView(APIView):
