@@ -78,7 +78,7 @@ class ReportesApiTests(APITestCase):
         self.assertEqual(response.data[0]["dias_vencido"], 3)
         self.assertEqual(response.data[0]["activos_pendientes"], "RPT-001")
 
-    def test_reporte_prestamos_permite_descargar_pdf_de_herramientas(self):
+    def test_reporte_prestamos_permite_descargar_pdfs_de_salida_y_devolucion(self):
         fecha_prevista = timezone.localdate() + timedelta(days=5)
         prestamo = Prestamo.objects.create(
             nombre_receptor="Colaborador",
@@ -88,6 +88,7 @@ class ReportesApiTests(APITestCase):
         )
         SolicitudPrestamo.objects.create(
             solicitante=self.admin,
+            consecutivo="OS-PRUEBA-09",
             nombre_receptor=prestamo.nombre_receptor,
             documento_receptor=prestamo.documento_receptor,
             fecha_devolucion_prevista=fecha_prevista,
@@ -95,6 +96,7 @@ class ReportesApiTests(APITestCase):
             estado=SolicitudPrestamo.Estado.APROBADA,
             prestamo=prestamo,
             formato_salida_pdf=b"%PDF-prueba",
+            formato_retorno_pdf=b"%PDF-devolucion",
         )
         prestamo_sin_pdf = Prestamo.objects.create(
             nombre_receptor="Sin formato",
@@ -114,12 +116,15 @@ class ReportesApiTests(APITestCase):
 
         reporte = self.client.get(reverse("reporte-prestamos"))
         formatos = {
-            fila["id"]: fila["formato_salida_disponible"]
+            fila["id"]: (
+                fila["formato_salida_disponible"],
+                fila["formato_retorno_disponible"],
+            )
             for fila in reporte.data
         }
         self.assertEqual(reporte.status_code, status.HTTP_200_OK)
-        self.assertTrue(formatos[prestamo.pk])
-        self.assertFalse(formatos[prestamo_sin_pdf.pk])
+        self.assertEqual(formatos[prestamo.pk], (True, True))
+        self.assertEqual(formatos[prestamo_sin_pdf.pk], (False, False))
 
         descarga = self.client.get(
             reverse(
@@ -131,6 +136,20 @@ class ReportesApiTests(APITestCase):
         self.assertEqual(descarga["Content-Type"], "application/pdf")
         self.assertEqual(descarga.content, b"%PDF-prueba")
 
+        descarga_retorno = self.client.get(
+            reverse(
+                "reporte-prestamo-formato-retorno",
+                kwargs={"pk": prestamo.pk},
+            )
+        )
+        self.assertEqual(descarga_retorno.status_code, status.HTTP_200_OK)
+        self.assertEqual(descarga_retorno["Content-Type"], "application/pdf")
+        self.assertEqual(
+            descarga_retorno["Content-Disposition"],
+            'attachment; filename="OYS-FO-09-os-prueba-09-retorno.pdf"',
+        )
+        self.assertEqual(descarga_retorno.content, b"%PDF-devolucion")
+
         no_disponible = self.client.get(
             reverse(
                 "reporte-prestamo-listado-herramientas",
@@ -138,6 +157,17 @@ class ReportesApiTests(APITestCase):
             )
         )
         self.assertEqual(no_disponible.status_code, status.HTTP_404_NOT_FOUND)
+
+        retorno_no_disponible = self.client.get(
+            reverse(
+                "reporte-prestamo-formato-retorno",
+                kwargs={"pk": prestamo_sin_pdf.pk},
+            )
+        )
+        self.assertEqual(
+            retorno_no_disponible.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
 
     def test_exporta_a_excel_y_pdf(self):
         response_excel = self.client.get(

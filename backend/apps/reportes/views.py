@@ -240,30 +240,43 @@ class PrestamosReporteView(APIView):
         return Response(_datos_prestamos(request))
 
 
+def _descargar_formato_prestamo(pk, campo_pdf, sufijo):
+    solicitud = get_object_or_404(
+        SolicitudPrestamo.objects.only("id", "consecutivo", campo_pdf),
+        prestamo_id=pk,
+    )
+    contenido = getattr(solicitud, campo_pdf)
+    if not contenido:
+        raise Http404("El formato solicitado todavía no está disponible.")
+
+    nombre = slugify(solicitud.consecutivo) or f"prestamo-{pk}"
+    response = HttpResponse(bytes(contenido), content_type="application/pdf")
+    response["Content-Disposition"] = (
+        f'attachment; filename="OYS-FO-09-{nombre}-{sufijo}.pdf"'
+    )
+    return response
+
+
 class DescargarListadoHerramientasPrestamoView(APIView):
     permission_classes = [PuedeConsultarReportes]
 
     def get(self, request, pk):
-        solicitud = get_object_or_404(
-            SolicitudPrestamo.objects.only(
-                "id",
-                "consecutivo",
-                "formato_salida_pdf",
-            ),
-            prestamo_id=pk,
+        return _descargar_formato_prestamo(
+            pk,
+            "formato_salida_pdf",
+            "salida",
         )
-        if not solicitud.formato_salida_pdf:
-            raise Http404("El listado de herramientas todavía no está disponible.")
 
-        nombre = slugify(solicitud.consecutivo) or f"prestamo-{pk}"
-        response = HttpResponse(
-            bytes(solicitud.formato_salida_pdf),
-            content_type="application/pdf",
+
+class DescargarFormatoRetornoPrestamoView(APIView):
+    permission_classes = [PuedeConsultarReportes]
+
+    def get(self, request, pk):
+        return _descargar_formato_prestamo(
+            pk,
+            "formato_retorno_pdf",
+            "retorno",
         )
-        response["Content-Disposition"] = (
-            f'attachment; filename="OYS-FO-09-{nombre}-salida.pdf"'
-        )
-        return response
 
 
 class VencimientosReporteView(APIView):

@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    DescargarFormatoRetornoPrestamoView,
     DescargarListadoHerramientasPrestamoView,
     DevolucionesReporteView,
     ExportarReporteView,
@@ -17,6 +18,11 @@ urlpatterns = [
         "prestamos/<int:pk>/listado-herramientas/",
         DescargarListadoHerramientasPrestamoView.as_view(),
         name="reporte-prestamo-listado-herramientas",
+    ),
+    path(
+        "prestamos/<int:pk>/formato-retorno/",
+        DescargarFormatoRetornoPrestamoView.as_view(),
+        name="reporte-prestamo-formato-retorno",
     ),
     path("vencimientos/", VencimientosReporteView.as_view(), name="reporte-vencimientos"),
     path("devoluciones/", DevolucionesReporteView.as_view(), name="reporte-devoluciones"),

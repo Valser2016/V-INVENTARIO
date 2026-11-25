@@ -249,7 +249,11 @@ def _rellenar_plantilla(
             f"O{fila_firmas}",
             f"A{fila_observaciones}",
         ):
-            hoja[referencia].font = copy(fuente_datos)
+            celda = hoja[referencia]
+            celda.font = copy(fuente_datos)
+            alineacion = copy(celda.alignment)
+            alineacion.vertical = "center"
+            celda.alignment = alineacion
 
         _establecer_texto(hoja, "D5", solicitud.cliente)
         _establecer_texto(hoja, "M5", _nombre_usuario(solicitud.solicitante))

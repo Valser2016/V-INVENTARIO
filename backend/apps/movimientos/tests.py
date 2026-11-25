@@ -185,6 +185,10 @@ class PrestamoApiTests(APITestCase):
                     copy(hoja[referencia].font)
                     for referencia in ("C43", "G43", "K43", "O43", "A46")
                 ),
+                "alineaciones_verticales": tuple(
+                    hoja[referencia].alignment.vertical
+                    for referencia in ("C43", "G43", "K43", "O43", "A46")
+                ),
                 "borde_cliente": tuple(
                     getattr(hoja["M5"].border, lado).style
                     if getattr(hoja["M5"].border, lado)
@@ -733,6 +737,10 @@ class PrestamoApiTests(APITestCase):
                 for fuente in formato_previo["fuentes_campos"]
             )
         )
+        self.assertEqual(
+            formato_previo["alineaciones_verticales"],
+            ("center", "center", "center", "center", "center"),
+        )
 
         response = self.client.post(
             reverse("solicitud-prestamo-aprobar", args=[solicitud.data["id"]]),
@@ -1253,6 +1261,10 @@ class PrestamoApiTests(APITestCase):
                 fuente == formato_retorno["fuente_cuerpo"]
                 for fuente in formato_retorno["fuentes_campos"]
             )
+        )
+        self.assertEqual(
+            formato_retorno["alineaciones_verticales"],
+            ("center", "center", "center", "center", "center"),
         )
         descarga_prestamo = self.client.get(
             reverse("prestamo-formato-retorno", args=[prestamo_id]),

@@ -72,8 +72,9 @@ describe("Reportes", () => {
         });
     });
 
-    it("muestra préstamos paginados y descarga su listado de herramientas", async () => {
-        const pdf = new Blob(["pdf"], { type: "application/pdf" });
+    it("muestra préstamos y descarga los formatos de salida y devolución", async () => {
+        const pdfSalida = new Blob(["pdf salida"], { type: "application/pdf" });
+        const pdfRetorno = new Blob(["pdf retorno"], { type: "application/pdf" });
         vi.stubGlobal("URL", {
             createObjectURL: vi.fn(() => "blob:prestamo"),
             revokeObjectURL: vi.fn(),
@@ -94,9 +95,14 @@ describe("Reportes", () => {
                     total_activos: 1,
                     activos_pendientes: 1,
                     formato_salida_disponible: true,
+                    formato_retorno_disponible: true,
                     detalles: [{ codigo_interno: "PC-001" }],
                 }],
-            } : url === "/reportes/prestamos/12/listado-herramientas/" ? pdf : [],
+            } : url === "/reportes/prestamos/12/listado-herramientas/"
+                ? pdfSalida
+                : url === "/reportes/prestamos/12/formato-retorno/"
+                    ? pdfRetorno
+                    : [],
         }));
         const user = userEvent.setup();
         render(<Reportes />);
@@ -116,6 +122,17 @@ describe("Reportes", () => {
             );
         });
         expect(click).toHaveBeenCalled();
+
+        await user.click(screen.getByRole("button", {
+            name: "Descargar formato de devolución del préstamo 12",
+        }));
+
+        await waitFor(() => {
+            expect(api.get).toHaveBeenCalledWith(
+                "/reportes/prestamos/12/formato-retorno/",
+                { responseType: "blob" },
+            );
+        });
     });
 
     it("solicita y descarga el reporte en Excel", async () => {
