@@ -358,7 +358,7 @@ def _rellenar_plantilla(
                 _establecer_texto(
                     hoja,
                     f"B{fila}",
-                    f"Consumible: {consumible.nombre}",
+                    consumible.nombre,
                 )
                 hoja[f"N{fila}"] = consumible.cantidad
                 hoja[f"O{fila}"] = consumible.cantidad

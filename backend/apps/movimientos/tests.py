@@ -396,7 +396,7 @@ class PrestamoApiTests(APITestCase):
         self.assertEqual(consumible.cantidad, 5)
         self.assertEqual(
             self.oys_generados[-1]["descripcion_fila_11"],
-            "Consumible: Cinta aislante",
+            "Cinta aislante",
         )
         self.assertEqual(self.oys_generados[-1]["cantidad_fila_11"], 5)
 
@@ -429,7 +429,10 @@ class PrestamoApiTests(APITestCase):
         prestamo = Prestamo.objects.get(pk=aprobacion.data["prestamo_id"])
         self.assertFalse(prestamo.detalles.exists())
         self.assertEqual(prestamo.consumibles.get().cantidad, 3)
-        self.assertEqual(self.oys_generados[-1]["descripcion"], "Consumible: Guantes de nitrilo")
+        self.assertEqual(
+            self.oys_generados[-1]["descripcion"],
+            "Guantes de nitrilo",
+        )
         self.assertEqual(self.oys_generados[-1]["cantidad"], 3)
 
     def test_crea_y_registra_devolucion_de_consumibles_sin_activos_de_inventario(self):
