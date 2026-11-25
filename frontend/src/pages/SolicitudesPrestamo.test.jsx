@@ -124,6 +124,34 @@ const abrirSolicitudes = async (user, titulo = "Mis solicitudes") => {
     await user.click(await screen.findByRole("button", { name: titulo }));
 };
 
+const completarDatosSolicitud = (datos = {}) => {
+    fireEvent.change(screen.getByLabelText("Cliente"), {
+        target: { value: datos.cliente || "Acme Industrial" },
+    });
+    fireEvent.change(screen.getByLabelText("Consecutivo del servicio"), {
+        target: { value: datos.consecutivo || "OS-1001" },
+    });
+    fireEvent.change(screen.getByLabelText("Nombre del colaborador"), {
+        target: { value: datos.colaborador || "Técnico de pruebas" },
+    });
+    fireEvent.change(screen.getByLabelText("Documento"), {
+        target: { value: datos.documento || "654321" },
+    });
+    fireEvent.change(screen.getByLabelText("¿Para qué necesitas los activos?"), {
+        target: { value: datos.motivo || "Trabajo en planta" },
+    });
+};
+
+const avanzarASeleccionHerramientas = async (user) => {
+    await user.click(screen.getByRole("button", {
+        name: "Continuar a herramientas",
+    }));
+};
+
+const avanzarAConfirmacion = async (user) => {
+    await user.click(screen.getByRole("button", { name: "Revisar solicitud" }));
+};
+
 beforeEach(() => {
     vi.mocked(api.get).mockReset();
     vi.mocked(api.post).mockReset().mockResolvedValue({ data: {} });
@@ -169,22 +197,7 @@ describe("Solicitudes de préstamo", () => {
 
         expect(screen.queryByLabelText("Cliente")).not.toBeInTheDocument();
         await user.click(screen.getByRole("button", { name: "Nueva solicitud" }));
-        fireEvent.change(screen.getByLabelText("Cliente"), {
-            target: { value: "Acme Industrial" },
-        });
-        fireEvent.change(screen.getByLabelText("Consecutivo del servicio"), {
-            target: { value: "OS-1001" },
-        });
-        await user.type(
-            await screen.findByLabelText("Nombre del colaborador"),
-            "Técnico de pruebas",
-        );
-        await user.type(screen.getByLabelText("Documento"), "654321");
-        await user.type(
-            screen.getByLabelText("¿Para qué necesitas los activos?"),
-            "Trabajo en planta",
-        );
-        await user.click(screen.getByLabelText(/PC-008 — Portátil de pruebas/));
+        completarDatosSolicitud();
         await user.click(screen.getByRole("button", {
             name: "Adicionar consumibles",
         }));
@@ -194,6 +207,12 @@ describe("Solicitudes de préstamo", () => {
         );
         await user.clear(screen.getByLabelText("Cantidad solicitada"));
         await user.type(screen.getByLabelText("Cantidad solicitada"), "2");
+        await avanzarASeleccionHerramientas(user);
+        await user.click(screen.getByLabelText(/PC-008 — Portátil de pruebas/));
+        await avanzarAConfirmacion(user);
+        expect(screen.getByLabelText("Confirmación de la solicitud")).toHaveTextContent(
+            "PC-008 — Portátil de pruebas",
+        );
         await user.click(screen.getByRole("button", { name: "Enviar solicitud" }));
 
         await waitFor(() => {
@@ -221,12 +240,36 @@ describe("Solicitudes de préstamo", () => {
         })).toHaveAttribute("aria-expanded", "true");
     });
 
+    it("requiere una herramienta o consumible antes de confirmar", async () => {
+        prepararRespuestas();
+        const user = userEvent.setup();
+        renderPage();
+
+        await user.click(screen.getByRole("button", { name: "Nueva solicitud" }));
+        completarDatosSolicitud();
+        await avanzarASeleccionHerramientas(user);
+        await avanzarAConfirmacion(user);
+
+        expect(screen.getByRole("alert")).toHaveTextContent(
+            "Selecciona al menos una herramienta o agrega un consumible.",
+        );
+        expect(screen.getByText("Paso 2 de 3")).toBeInTheDocument();
+
+        await user.click(screen.getByLabelText(/PC-008 — Portátil de pruebas/));
+        await avanzarAConfirmacion(user);
+        expect(screen.getByLabelText("Confirmación de la solicitud")).toHaveTextContent(
+            "PC-008 — Portátil de pruebas",
+        );
+    });
+
     it("agrega a la solicitud la herramienta disponible leída por QR", async () => {
         prepararRespuestas();
         const user = userEvent.setup();
         renderPage();
 
         await user.click(screen.getByRole("button", { name: "Nueva solicitud" }));
+        completarDatosSolicitud();
+        await avanzarASeleccionHerramientas(user);
         await user.click(await screen.findByRole("button", {
             name: "Leer QR con cámara",
         }));
@@ -246,6 +289,8 @@ describe("Solicitudes de préstamo", () => {
         renderPage();
 
         await user.click(screen.getByRole("button", { name: "Nueva solicitud" }));
+        completarDatosSolicitud();
+        await avanzarASeleccionHerramientas(user);
         await user.click(await screen.findByRole("button", {
             name: "Leer QR con cámara",
         }));
@@ -267,18 +312,10 @@ describe("Solicitudes de préstamo", () => {
         await user.click(await screen.findByRole("button", {
             name: "Nueva solicitud",
         }));
-        await user.type(screen.getByLabelText("Cliente"), "Acme Industrial");
-        await user.type(screen.getByLabelText("Consecutivo del servicio"), "OS-1003");
-        await user.type(
-            screen.getByLabelText("Nombre del colaborador"),
-            "Administración",
-        );
-        await user.type(screen.getByLabelText("Documento"), "123456");
-        await user.type(
-            screen.getByLabelText("¿Para qué necesitas los activos?"),
-            "Trabajo en planta",
-        );
-        await user.click(screen.getByLabelText(/PC-008 — Portátil de pruebas/));
+        completarDatosSolicitud({
+            consecutivo: "OS-1003",
+            colaborador: "Administración",
+        });
         await user.click(screen.getByRole("button", {
             name: "Adicionar consumibles",
         }));
@@ -288,6 +325,9 @@ describe("Solicitudes de préstamo", () => {
         );
         await user.clear(screen.getByLabelText("Cantidad solicitada"));
         await user.type(screen.getByLabelText("Cantidad solicitada"), "2");
+        await avanzarASeleccionHerramientas(user);
+        await user.click(screen.getByLabelText(/PC-008 — Portátil de pruebas/));
+        await avanzarAConfirmacion(user);
         await user.click(screen.getByRole("button", { name: "Enviar solicitud" }));
 
         await waitFor(() => {
@@ -316,14 +356,10 @@ describe("Solicitudes de préstamo", () => {
         renderPage();
 
         await user.click(screen.getByRole("button", { name: "Nueva solicitud" }));
-        await user.type(screen.getByLabelText("Cliente"), "Acme Industrial");
-        await user.type(screen.getByLabelText("Consecutivo del servicio"), "OS-1004");
-        await user.type(screen.getByLabelText("Nombre del colaborador"), "Técnico");
-        await user.type(screen.getByLabelText("Documento"), "654321");
-        await user.type(
-            screen.getByLabelText("¿Para qué necesitas los activos?"),
-            "Trabajo en planta",
-        );
+        completarDatosSolicitud({
+            consecutivo: "OS-1004",
+            colaborador: "Técnico",
+        });
         await user.click(screen.getByRole("button", {
             name: "Adicionar consumibles",
         }));
@@ -333,6 +369,8 @@ describe("Solicitudes de préstamo", () => {
         );
         await user.clear(screen.getByLabelText("Cantidad solicitada"));
         await user.type(screen.getByLabelText("Cantidad solicitada"), "3");
+        await avanzarASeleccionHerramientas(user);
+        await avanzarAConfirmacion(user);
         await user.click(screen.getByRole("button", { name: "Enviar solicitud" }));
 
         await waitFor(() => {
@@ -359,6 +397,11 @@ describe("Solicitudes de préstamo", () => {
         const user = userEvent.setup();
         renderPage();
         await user.click(screen.getByRole("button", { name: "Nueva solicitud" }));
+        completarDatosSolicitud({
+            consecutivo: "OS-1002",
+            colaborador: "Técnico",
+        });
+        await avanzarASeleccionHerramientas(user);
         await user.click(screen.getByLabelText("Listado predeterminado"));
         await user.selectOptions(
             screen.getByLabelText("Selecciona un listado"),
@@ -371,14 +414,7 @@ describe("Solicitudes de préstamo", () => {
         );
         await user.click(screen.getByLabelText(/PC-009 — Portátil adicional/));
         expect(screen.getByLabelText(/PC-009 — Portátil adicional/)).toBeChecked();
-        await user.type(screen.getByLabelText("Cliente"), "Acme Industrial");
-        await user.type(screen.getByLabelText("Consecutivo del servicio"), "OS-1002");
-        await user.type(screen.getByLabelText("Nombre del colaborador"), "Técnico");
-        await user.type(screen.getByLabelText("Documento"), "654321");
-        await user.type(
-            screen.getByLabelText("¿Para qué necesitas los activos?"),
-            "Trabajo en planta",
-        );
+        await avanzarAConfirmacion(user);
         await user.click(screen.getByRole("button", { name: "Enviar solicitud" }));
 
         await waitFor(() => {

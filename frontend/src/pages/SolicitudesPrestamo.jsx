@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import api from "../services/api";
 import { useSession } from "../context/SessionContext";
 
@@ -72,6 +72,8 @@ function SolicitudesPrestamo() {
     const [error, setError] = useState("");
     const [mensaje, setMensaje] = useState("");
     const [formularioAbierto, setFormularioAbierto] = useState(false);
+    const [pasoSolicitud, setPasoSolicitud] = useState(0);
+    const [errorPasoSolicitud, setErrorPasoSolicitud] = useState("");
     const [solicitudesAbiertas, setSolicitudesAbiertas] = useState(false);
     const [listasAbiertas, setListasAbiertas] = useState(false);
     const [historialSolicitudesAbierto, setHistorialSolicitudesAbierto] = useState(false);
@@ -101,6 +103,7 @@ function SolicitudesPrestamo() {
         activos: [],
         consumibles: [],
     });
+    const formularioSolicitudRef = useRef(null);
 
     const cargarDatos = useCallback(async () => {
         try {
@@ -141,6 +144,19 @@ function SolicitudesPrestamo() {
     useEffect(() => {
         void Promise.resolve().then(cargarDatos);
     }, [cargarDatos]);
+
+    useEffect(() => {
+        if (
+            !formularioAbierto
+            || !window.matchMedia?.("(max-width: 640px)").matches
+        ) {
+            return;
+        }
+        formularioSolicitudRef.current?.scrollIntoView?.({
+            behavior: "smooth",
+            block: "start",
+        });
+    }, [formularioAbierto, pasoSolicitud]);
 
     const cambiarCampo = (campo, valor) => {
         setFormulario((actual) => ({ ...actual, [campo]: valor }));
@@ -202,6 +218,34 @@ function SolicitudesPrestamo() {
             "consumibles",
             formulario.consumibles.filter((_, actual) => actual !== indice),
         );
+    };
+
+    const continuarPasoSolicitud = () => {
+        const contenidoPaso = formularioSolicitudRef.current?.querySelector(
+            `[data-solicitud-paso="${pasoSolicitud}"]`,
+        );
+        const campoInvalido = contenidoPaso?.querySelector(":invalid");
+        if (campoInvalido) {
+            campoInvalido.reportValidity();
+            return;
+        }
+        if (
+            pasoSolicitud === 1
+            && formulario.activos.length === 0
+            && !tieneConsumiblesValidos
+        ) {
+            setErrorPasoSolicitud(
+                "Selecciona al menos una herramienta o agrega un consumible.",
+            );
+            return;
+        }
+        setErrorPasoSolicitud("");
+        setPasoSolicitud((actual) => Math.min(actual + 1, 2));
+    };
+
+    const volverPasoSolicitud = () => {
+        setErrorPasoSolicitud("");
+        setPasoSolicitud((actual) => Math.max(actual - 1, 0));
     };
 
     const seleccionarModo = (modo) => {
@@ -334,6 +378,8 @@ function SolicitudesPrestamo() {
             setModoSeleccion("individual");
             setListaSeleccionadaId("");
             setAvisoLista("");
+            setPasoSolicitud(0);
+            setErrorPasoSolicitud("");
             const requiereChecklist = formulario.activos.length > 0;
             setMensaje(administrador
                 ? requiereChecklist
@@ -521,6 +567,9 @@ function SolicitudesPrestamo() {
         (consumible) => consumible.nombre.trim()
             && Number.isInteger(Number(consumible.cantidad))
             && Number(consumible.cantidad) > 0,
+    );
+    const activosSeleccionados = activos.filter((activo) =>
+        formulario.activos.includes(activo.id),
     );
     const categoriasDisponibles = opcionesUnicas(
         activos,
@@ -746,7 +795,13 @@ function SolicitudesPrestamo() {
                             type="button"
                             aria-expanded={formularioAbierto}
                             aria-controls="formulario-nueva-solicitud"
-                            onClick={() => setFormularioAbierto((abierto) => !abierto)}
+                            onClick={() => {
+                                if (!formularioAbierto) {
+                                    setPasoSolicitud(0);
+                                    setErrorPasoSolicitud("");
+                                }
+                                setFormularioAbierto((abierto) => !abierto);
+                            }}
                         >
                             <span>Nueva solicitud</span>
                             <span className="request-section-indicator" aria-hidden="true">
@@ -755,8 +810,9 @@ function SolicitudesPrestamo() {
                         </button>
                         {formularioAbierto && (
                             <form
-                                className="card loan-form request-section-content"
+                                className="card loan-form request-creation-form request-section-content"
                                 id="formulario-nueva-solicitud"
+                                ref={formularioSolicitudRef}
                                 onSubmit={enviarSolicitud}
                             >
                                 <div className="card-header">
@@ -767,6 +823,40 @@ function SolicitudesPrestamo() {
                                             : "El préstamo solo se registra cuando Administración o Almacén lo aprueba."}
                                     </p>
                                 </div>
+                                <div className="request-form-stepper">
+                                    <p aria-live="polite" aria-atomic="true">
+                                        Paso {pasoSolicitud + 1} de 3
+                                    </p>
+                                    <ol aria-label="Pasos para crear una solicitud">
+                                        {["Datos", "Herramientas", "Confirmación"].map(
+                                            (nombrePaso, indice) => (
+                                                <li
+                                                    key={nombrePaso}
+                                                    aria-current={pasoSolicitud === indice
+                                                        ? "step"
+                                                        : undefined}
+                                                    className={pasoSolicitud === indice
+                                                        ? "is-current"
+                                                        : ""}
+                                                >
+                                                    <span>{indice + 1}</span>
+                                                    <strong>{nombrePaso}</strong>
+                                                </li>
+                                            ),
+                                        )}
+                                    </ol>
+                                </div>
+                                <section
+                                    className={`request-form-step${pasoSolicitud === 0
+                                        ? " is-active"
+                                        : ""}`}
+                                    data-solicitud-paso="0"
+                                    aria-label="Datos de la solicitud"
+                                >
+                                    <div className="request-step-heading">
+                                        <span>Paso 1</span>
+                                        <h3>Datos de la solicitud</h3>
+                                    </div>
                                 <section
                                     className="loan-consumables"
                                     aria-label="Consumibles de la solicitud"
@@ -924,7 +1014,30 @@ function SolicitudesPrestamo() {
                             </div>
                                 </div>
 
-                                <fieldset className="asset-selection">
+                                    <div className="request-step-actions request-step-navigation">
+                                        <button
+                                            className="btn btn-primary"
+                                            type="button"
+                                            onClick={continuarPasoSolicitud}
+                                        >
+                                            Continuar a herramientas
+                                        </button>
+                                    </div>
+                                </section>
+
+                                <section
+                                    className={`request-form-step${pasoSolicitud === 1
+                                        ? " is-active"
+                                        : ""}`}
+                                    data-solicitud-paso="1"
+                                    aria-label="Selección de herramientas"
+                                >
+                                    <div className="request-step-heading">
+                                        <span>Paso 2</span>
+                                        <h3>Elige las herramientas</h3>
+                                        <p>Escanea el QR o busca y marca los activos que necesitas.</p>
+                                    </div>
+                                <fieldset className="asset-selection asset-mode-selection">
                                     <legend>Modo de selección</legend>
                                     <label className="asset-option">
                                         <input
@@ -1105,22 +1218,124 @@ function SolicitudesPrestamo() {
                                     )}
                                 </fieldset>
 
-                                <div className="request-submit-actions">
-                                    <button
-                                        className="btn btn-primary"
-                                        type="submit"
-                                        disabled={
-                                            guardando
-                                            || cargando
-                                            || (
-                                                formulario.activos.length === 0
-                                                && !tieneConsumiblesValidos
-                                            )
-                                        }
-                                    >
-                                        {guardando ? "Enviando..." : "Enviar solicitud"}
-                                    </button>
-                                </div>
+                                    {errorPasoSolicitud && (
+                                        <p className="request-step-error" role="alert">
+                                            {errorPasoSolicitud}
+                                        </p>
+                                    )}
+                                    <div className="request-step-actions request-step-navigation">
+                                        <button
+                                            className="btn btn-secondary"
+                                            type="button"
+                                            onClick={volverPasoSolicitud}
+                                        >
+                                            Volver a datos
+                                        </button>
+                                        <button
+                                            className="btn btn-primary"
+                                            type="button"
+                                            onClick={continuarPasoSolicitud}
+                                        >
+                                            Revisar solicitud
+                                        </button>
+                                    </div>
+                                </section>
+
+                                <section
+                                    className={`request-form-step${pasoSolicitud === 2
+                                        ? " is-active"
+                                        : ""}`}
+                                    data-solicitud-paso="2"
+                                    aria-label="Confirmación de la solicitud"
+                                >
+                                    <div className="request-step-heading">
+                                        <span>Paso 3</span>
+                                        <h3>Revisa antes de enviar</h3>
+                                    </div>
+                                    <div className="request-review-summary">
+                                        <dl>
+                                            <div>
+                                                <dt>Cliente</dt>
+                                                <dd>{formulario.cliente}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>Consecutivo del servicio</dt>
+                                                <dd>{formulario.consecutivo}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>Colaborador</dt>
+                                                <dd>{formulario.nombre_receptor}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>Documento</dt>
+                                                <dd>{formulario.documento_receptor}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>Devolución prevista</dt>
+                                                <dd>{formulario.fecha_devolucion_prevista}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>Motivo</dt>
+                                                <dd>{formulario.motivo}</dd>
+                                            </div>
+                                            {formulario.observaciones && (
+                                                <div>
+                                                    <dt>Observaciones adicionales</dt>
+                                                    <dd>{formulario.observaciones}</dd>
+                                                </div>
+                                            )}
+                                        </dl>
+                                        <div>
+                                            <h4>Herramientas ({activosSeleccionados.length})</h4>
+                                            {activosSeleccionados.length ? (
+                                                <ul>
+                                                    {activosSeleccionados.map((activo) => (
+                                                        <li key={activo.id}>
+                                                            {activo.codigo_interno} — {activo.nombre}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            ) : (
+                                                <p>No se seleccionaron herramientas.</p>
+                                            )}
+                                        </div>
+                                        {formulario.consumibles.length > 0 && (
+                                            <div>
+                                                <h4>Consumibles</h4>
+                                                <ul>
+                                                    {formulario.consumibles.map((consumible, indice) => (
+                                                        <li key={`resumen-consumible-${indice}`}>
+                                                            {consumible.nombre} — {consumible.cantidad}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="request-step-actions request-submit-actions">
+                                        <button
+                                            className="btn btn-secondary request-step-back"
+                                            type="button"
+                                            onClick={volverPasoSolicitud}
+                                        >
+                                            Volver a herramientas
+                                        </button>
+                                        <button
+                                            className="btn btn-primary"
+                                            type="submit"
+                                            disabled={
+                                                guardando
+                                                || cargando
+                                                || (
+                                                    formulario.activos.length === 0
+                                                    && !tieneConsumiblesValidos
+                                                )
+                                            }
+                                        >
+                                            {guardando ? "Enviando..." : "Enviar solicitud"}
+                                        </button>
+                                    </div>
+                                </section>
                             </form>
                         )}
                     </div>

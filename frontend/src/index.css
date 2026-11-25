@@ -2374,6 +2374,31 @@ a {
     margin-top: 8px;
 }
 
+.request-form-step {
+    display: grid;
+    gap: 12px;
+}
+
+.request-form-stepper,
+.request-step-heading,
+.request-review-summary {
+    display: none;
+}
+
+.request-step-navigation {
+    display: none;
+}
+
+.request-step-back {
+    display: none;
+}
+
+.request-step-error {
+    margin: 0;
+    color: #a52b2b;
+    font-size: 13px;
+}
+
 .asset-selection-count {
     margin: 0;
     color: var(--primary);
@@ -2627,36 +2652,36 @@ a {
         text-align: center;
     }
 
-    .requests-page-technician .page-header {
+    .requests-page .page-header {
         gap: 7px;
         margin-bottom: 16px;
     }
 
-    .requests-page-technician .page-header h1 {
+    .requests-page .page-header h1 {
         margin-top: 5px;
         font-size: 22px;
     }
 
-    .requests-page-technician .page-header p {
+    .requests-page .page-header p {
         max-width: 35ch;
         font-size: 13px;
     }
 
-    .requests-page-technician .request-sections {
+    .requests-page .request-sections {
         gap: 10px;
     }
 
-    .requests-page-technician .request-section-toggle {
+    .requests-page .request-section-toggle {
         min-height: 60px;
         padding: 14px 16px;
         font-size: 15px;
     }
 
-    .requests-page-technician .request-section-toggle-primary .request-section-indicator {
+    .requests-page .request-section-toggle-primary .request-section-indicator {
         color: #fff;
     }
 
-    .requests-page-technician .request-section-content.loan-form {
+    .requests-page .request-section-content.loan-form {
         padding: 16px;
     }
 
@@ -2781,6 +2806,311 @@ a {
 
     .requests-page-technician .request-card {
         padding: 14px;
+    }
+
+    .requests-page .request-creation-form {
+        gap: 14px;
+    }
+
+    .requests-page .request-creation-form .form-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 12px;
+        padding: 14px 0;
+    }
+
+    .requests-page .request-creation-form [data-solicitud-paso="0"] > .form-grid {
+        order: 1;
+    }
+
+    .requests-page .request-creation-form [data-solicitud-paso="0"] > .loan-consumables {
+        order: 2;
+    }
+
+    .requests-page .request-creation-form [data-solicitud-paso="0"] > .request-step-actions {
+        order: 3;
+    }
+
+    .requests-page .request-creation-form .asset-search-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px 8px;
+        padding: 4px 0 0;
+    }
+
+    .requests-page .request-creation-form .asset-search-filters .form-group:first-child {
+        grid-column: 1 / -1;
+    }
+
+    .requests-page .request-creation-form .asset-search-filters .form-group label {
+        margin-bottom: 3px;
+        font-size: 10px;
+    }
+
+    .requests-page .request-creation-form .asset-search-filters .form-group input,
+    .requests-page .request-creation-form .asset-search-filters .form-group select {
+        height: 40px;
+        min-height: 40px;
+        padding-right: 8px;
+        padding-left: 8px;
+    }
+
+    .requests-page .request-creation-form .card-header h2 {
+        font-size: 19px;
+    }
+
+    .requests-page .request-creation-form .card-header p {
+        font-size: 12px;
+        line-height: 1.5;
+    }
+
+    .requests-page .request-creation-form .form-group label {
+        margin-bottom: 6px;
+        font-size: 13px;
+    }
+
+    .requests-page .request-creation-form .form-group input,
+    .requests-page .request-creation-form .form-group select {
+        min-height: 48px;
+        font-size: 16px;
+    }
+
+    .requests-page .request-creation-form .form-group textarea {
+        min-height: 84px;
+        font-size: 16px;
+    }
+
+    .requests-page .request-creation-form .request-form-step {
+        display: none;
+        gap: 16px;
+    }
+
+    .requests-page .request-creation-form .request-form-step.is-active {
+        display: grid;
+    }
+
+    .requests-page .request-form-stepper {
+        display: grid;
+        gap: 9px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #f8faf7;
+    }
+
+    .requests-page .request-form-stepper p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .requests-page .request-form-stepper ol {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    .requests-page .request-form-stepper li {
+        display: grid;
+        justify-items: center;
+        gap: 5px;
+        color: var(--muted);
+        text-align: center;
+    }
+
+    .requests-page .request-form-stepper li span {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: #fff;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .requests-page .request-form-stepper li strong {
+        font-size: 11px;
+        line-height: 1.3;
+    }
+
+    .requests-page .request-form-stepper li.is-current {
+        color: var(--primary-dark);
+    }
+
+    .requests-page .request-form-stepper li.is-current span {
+        border-color: var(--primary);
+        color: #fff;
+        background: var(--primary);
+    }
+
+    .requests-page .request-step-heading {
+        display: block;
+    }
+
+    .requests-page .request-step-heading > span {
+        color: var(--primary-dark);
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+    .requests-page .request-step-heading h3 {
+        margin: 4px 0;
+        font-size: 19px;
+    }
+
+    .requests-page .request-step-heading p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+    }
+
+    .requests-page .request-creation-form .loan-consumables {
+        margin: 8px 0;
+    }
+
+    .requests-page .request-creation-form .loan-consumables-header {
+        align-items: flex-start;
+    }
+
+    .requests-page .request-creation-form .loan-consumables-header .btn {
+        min-height: 48px;
+        flex: 0 0 auto;
+    }
+
+    .requests-page .request-creation-form .asset-selection {
+        max-height: 52vh;
+        padding: 10px;
+    }
+
+    .requests-page .request-creation-form .asset-mode-selection {
+        max-height: none;
+        overflow: visible;
+    }
+
+    .requests-page .request-creation-form .asset-selection legend {
+        font-size: 13px;
+    }
+
+    .requests-page .request-creation-form .asset-option {
+        min-height: 58px;
+        align-items: flex-start;
+        gap: 11px;
+        padding: 12px 10px;
+    }
+
+    .requests-page .request-creation-form .asset-option input {
+        width: 22px;
+        height: 22px;
+        flex: 0 0 22px;
+        margin: 1px 0 0;
+    }
+
+    .requests-page .request-creation-form .asset-option strong {
+        font-size: 14px;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+    }
+
+    .requests-page .request-creation-form .asset-option small {
+        font-size: 12px;
+        line-height: 1.4;
+    }
+
+    .requests-page .request-creation-form .asset-search-filters .asset-qr-action {
+        grid-column: 1 / -1;
+    }
+
+    .requests-page .request-creation-form .asset-qr-action .btn {
+        width: 100%;
+        min-height: 48px;
+    }
+
+    .requests-page .request-creation-form .request-step-navigation,
+    .requests-page .request-creation-form .request-submit-actions {
+        display: flex;
+        gap: 8px;
+        margin: 0;
+        padding: 8px 0 env(safe-area-inset-bottom, 8px);
+    }
+
+    .requests-page .request-creation-form .request-step-actions .btn {
+        min-height: 50px;
+        flex: 1;
+        font-size: 14px;
+    }
+
+    .requests-page .request-creation-form .request-step-back {
+        display: inline-flex;
+    }
+
+    .requests-page .request-review-summary {
+        display: grid;
+        gap: 14px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fbfcfa;
+    }
+
+    .requests-page .request-review-summary dl {
+        display: grid;
+        gap: 10px;
+        margin: 0;
+    }
+
+    .requests-page .request-review-summary dl > div {
+        display: grid;
+        gap: 3px;
+    }
+
+    .requests-page .request-review-summary dt {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .requests-page .request-review-summary dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+        font-size: 14px;
+    }
+
+    .requests-page .request-review-summary h4 {
+        margin: 0 0 6px;
+        font-size: 14px;
+    }
+
+    .requests-page .request-review-summary ul {
+        margin: 0;
+        padding-left: 20px;
+        font-size: 13px;
+        line-height: 1.6;
+    }
+
+    .requests-page .request-review-summary p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+    }
+
+    .requests-page .request-creation-form .request-submit-actions {
+        position: sticky;
+        bottom: 0;
+        z-index: 3;
+        margin: 0 -16px -16px;
+        padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+        border-top: 1px solid var(--line);
+        background: #fff;
+    }
+
+    .requests-page .request-creation-form .request-submit-actions .btn-primary {
+        flex: 1.15;
     }
 }
 
