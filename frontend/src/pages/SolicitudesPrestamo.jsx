@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "../services/api";
 import { useSession } from "../context/SessionContext";
 
@@ -56,6 +56,14 @@ function SolicitudesPrestamo() {
     );
     const esTecnicoSolicitante = puedeSolicitar && !puedeGestionarSolicitudes;
     const [solicitudes, setSolicitudes] = useState([]);
+    const numerosVisiblesSolicitudes = useMemo(() => {
+        const solicitudesCronologicas = [...solicitudes].sort(
+            (a, b) => a.id - b.id,
+        );
+        return new Map(solicitudesCronologicas.map(
+            (solicitud, indice) => [solicitud.id, indice + 1],
+        ));
+    }, [solicitudes]);
     const [activos, setActivos] = useState([]);
     const [listasHerramientas, setListasHerramientas] = useState([]);
     const [activosParaListas, setActivosParaListas] = useState([]);
@@ -484,9 +492,10 @@ function SolicitudesPrestamo() {
 
     const eliminarSolicitud = async (solicitud) => {
         const tienePrestamo = Boolean(solicitud.prestamo_id);
+        const numeroVisible = numerosVisiblesSolicitudes.get(solicitud.id) ?? "";
         const confirmacion = tienePrestamo
-            ? `¿Eliminar permanentemente la solicitud #${solicitud.id} y el préstamo #${solicitud.prestamo_id}? También se borrarán sus detalles y formatos PDF. Los activos aún prestados recuperarán su estado y ubicación anteriores; los ya devueltos no cambiarán.`
-            : `¿Eliminar permanentemente la solicitud #${solicitud.id}?`;
+            ? `¿Eliminar permanentemente la solicitud #${numeroVisible} y el préstamo #${solicitud.prestamo_id}? También se borrarán sus detalles y formatos PDF. Los activos aún prestados recuperarán su estado y ubicación anteriores; los ya devueltos no cambiarán.`
+            : `¿Eliminar permanentemente la solicitud #${numeroVisible}?`;
         if (!window.confirm(confirmacion)) {
             return;
         }
@@ -1362,7 +1371,9 @@ function SolicitudesPrestamo() {
                                 <article className="request-card" key={solicitud.id}>
                                     <header className="loan-card-header">
                                         <div>
-                                            <span className="eyebrow">SOLICITUD #{solicitud.id}</span>
+                                            <span className="eyebrow">
+                                                SOLICITUD #{numerosVisiblesSolicitudes.get(solicitud.id) ?? ""}
+                                            </span>
                                             <h2>{solicitud.nombre_receptor}</h2>
                                             <p>
                                                 {(puedeGestionarSolicitudes || administrador) && (
@@ -1721,7 +1732,7 @@ function SolicitudesPrestamo() {
                                             <header className="loan-card-header">
                                                 <div>
                                                     <span className="eyebrow">
-                                                        SOLICITUD #{solicitud.id}
+                                                        SOLICITUD #{numerosVisiblesSolicitudes.get(solicitud.id) ?? ""}
                                                     </span>
                                                     <h2>{solicitud.nombre_receptor}</h2>
                                                 </div>

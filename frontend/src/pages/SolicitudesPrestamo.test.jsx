@@ -1,5 +1,12 @@
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+    cleanup,
+    fireEvent,
+    render,
+    screen,
+    waitFor,
+    within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -174,7 +181,7 @@ describe("Solicitudes de préstamo", () => {
         expect(botonNuevaSolicitud).toHaveAttribute("aria-expanded", "false");
         expect(botonMisSolicitudes).toHaveAttribute("aria-expanded", "false");
         expect(screen.queryByLabelText("Cliente")).not.toBeInTheDocument();
-        expect(screen.queryByText("SOLICITUD #12")).not.toBeInTheDocument();
+        expect(screen.queryByText("SOLICITUD #1")).not.toBeInTheDocument();
 
         await user.click(botonNuevaSolicitud);
         expect(screen.getByLabelText("Cliente")).toBeInTheDocument();
@@ -182,7 +189,7 @@ describe("Solicitudes de préstamo", () => {
             name: "Adicionar consumibles",
         })).toBeVisible();
         await user.click(botonMisSolicitudes);
-        expect(await screen.findByText("SOLICITUD #12")).toBeInTheDocument();
+        expect(await screen.findByText("SOLICITUD #1")).toBeInTheDocument();
     });
 
     it("permite al técnico solicitar activos y consumibles sin registrar un préstamo", async () => {
@@ -532,16 +539,16 @@ describe("Solicitudes de préstamo", () => {
 
         await abrirSolicitudes(user, "Solicitudes por aprobar");
 
-        expect(await screen.findByText("SOLICITUD #21")).toBeInTheDocument();
-        expect(screen.getByText("SOLICITUD #22")).toBeInTheDocument();
-        expect(screen.queryByText("SOLICITUD #23")).not.toBeInTheDocument();
-        expect(screen.queryByText("SOLICITUD #24")).not.toBeInTheDocument();
+        expect(await screen.findByText("SOLICITUD #1")).toBeInTheDocument();
+        expect(screen.getByText("SOLICITUD #2")).toBeInTheDocument();
+        expect(screen.queryByText("SOLICITUD #3")).not.toBeInTheDocument();
+        expect(screen.queryByText("SOLICITUD #4")).not.toBeInTheDocument();
 
         await user.click(screen.getByRole("button", {
             name: "Historial de solicitudes resueltas (2)",
         }));
-        expect(screen.getByText("SOLICITUD #23")).toBeInTheDocument();
-        expect(screen.getByText("SOLICITUD #24")).toBeInTheDocument();
+        expect(screen.getByText("SOLICITUD #3")).toBeInTheDocument();
+        expect(screen.getByText("SOLICITUD #4")).toBeInTheDocument();
     });
 
     it("permite aprobar al rol autorizado sin permitir eliminar solicitudes", async () => {
@@ -727,9 +734,62 @@ describe("Solicitudes de préstamo", () => {
         expect(window.confirm).toHaveBeenCalledWith(
             expect.stringContaining("préstamo #44"),
         );
+        expect(window.confirm).toHaveBeenCalledWith(
+            expect.stringContaining("solicitud #1"),
+        );
         expect(await screen.findByRole("status")).toHaveTextContent(
             "Se eliminaron la solicitud y el préstamo asociado.",
         );
+    });
+
+    it("compacta la numeración visible después de eliminar una solicitud", async () => {
+        let solicitudesActuales = [
+            { ...solicitud, id: 12 },
+            {
+                ...solicitud,
+                id: 14,
+                estado: "APROBADA",
+                estado_nombre: "Aprobada",
+            },
+        ];
+        prepararRespuestas(solicitudesActuales);
+        const respuestaOriginal = vi.mocked(api.get).getMockImplementation();
+        vi.mocked(api.get).mockImplementation((url) => {
+            if (url === "/movimientos/solicitudes-prestamo/") {
+                return Promise.resolve({ data: solicitudesActuales });
+            }
+            return respuestaOriginal(url);
+        });
+        vi.mocked(api.delete).mockImplementation(async () => {
+            solicitudesActuales = solicitudesActuales.filter(
+                (actual) => actual.id !== 12,
+            );
+            return { data: {} };
+        });
+        vi.spyOn(window, "confirm").mockReturnValue(true);
+        const user = userEvent.setup();
+        renderPage(true);
+
+        await abrirSolicitudes(user, "Solicitudes por aprobar");
+        expect(await screen.findByText("SOLICITUD #1")).toBeInTheDocument();
+        await user.click(screen.getByRole("button", {
+            name: "Historial de solicitudes resueltas (1)",
+        }));
+        expect(screen.getByText("SOLICITUD #2")).toBeInTheDocument();
+        const solicitudAEliminar = screen
+            .getByText("SOLICITUD #1")
+            .closest(".request-card");
+        await user.click(within(solicitudAEliminar).getByRole("button", {
+            name: "Eliminar solicitud",
+        }));
+
+        await waitFor(() => {
+            expect(api.delete).toHaveBeenCalledWith(
+                "/movimientos/solicitudes-prestamo/12/",
+            );
+            expect(screen.getAllByText(/^SOLICITUD #/)).toHaveLength(1);
+        });
+        expect(screen.getByText("SOLICITUD #1")).toBeInTheDocument();
     });
 
     it("no permite a un técnico eliminar una solicitud", async () => {
@@ -738,7 +798,7 @@ describe("Solicitudes de préstamo", () => {
         renderPage();
 
         await abrirSolicitudes(user);
-        await screen.findByText("SOLICITUD #12");
+        await screen.findByText("SOLICITUD #1");
         expect(screen.queryByRole("button", {
             name: "Eliminar solicitud",
         })).not.toBeInTheDocument();
@@ -753,7 +813,7 @@ describe("Solicitudes de préstamo", () => {
         });
 
         await abrirSolicitudes(user, "Solicitudes por aprobar");
-        await screen.findByText("SOLICITUD #12");
+        await screen.findByText("SOLICITUD #1");
         expect(screen.getByRole("button", {
             name: "Guardar checklist y generar PDF previo",
         })).toBeInTheDocument();
