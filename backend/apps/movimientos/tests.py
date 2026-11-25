@@ -752,7 +752,7 @@ class PrestamoApiTests(APITestCase):
         formato_generado = self.oys_generados[-1]
         self.assertEqual(formato_generado["hojas_visibles"], ["LISTADO"])
         self.assertEqual(formato_generado["cliente"], "Cliente de prueba")
-        self.assertEqual(formato_generado["solicitante"], "tecnico")
+        self.assertEqual(formato_generado["solicitante"], "Técnico de prueba")
         self.assertEqual(formato_generado["consecutivo"], "OS-1001")
         self.assertEqual(
             formato_generado["descripcion"],
@@ -764,7 +764,7 @@ class PrestamoApiTests(APITestCase):
         self.assertEqual(formato_generado["estado"], "Bueno")
         self.assertEqual(formato_generado["formato_fecha_salida"], "yyyy-mm-dd")
         self.assertIn("Motivo: Trabajo de mantenimiento", formato_generado["observaciones"])
-        self.assertEqual(formato_generado["entrega_salida"], "inventario")
+        self.assertEqual(formato_generado["entrega_salida"], "Administrador de pruebas")
         self.assertEqual(formato_generado["recibe_salida"], "Técnico de prueba")
         self.assertFalse(formato_generado["firma_salida"])
         self.assertIn(

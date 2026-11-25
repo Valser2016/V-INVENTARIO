@@ -35,7 +35,7 @@ class AdministracionUsuariosTests(APITestCase):
                 "username": "nuevo-usuario",
                 "first_name": "Nuevo",
                 "last_name": "Usuario",
-                "documento": "12345678",
+                "documento": "23456789",
                 "rol": self.rol_inventario.pk,
                 "password": "xY7#sP4!uQ9",
             },
