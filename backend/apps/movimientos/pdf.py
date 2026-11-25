@@ -239,6 +239,17 @@ def _rellenar_plantilla(
         _agregar_logo_oys(hoja)
 
         extras = _extender_filas_activos(hoja, len(lineas_salida))
+        fila_firmas = FILA_FIRMAS + extras
+        fila_observaciones = FILA_OBSERVACIONES + extras
+        fuente_datos = copy(hoja["B10"].font)
+        for referencia in (
+            f"C{fila_firmas}",
+            f"G{fila_firmas}",
+            f"K{fila_firmas}",
+            f"O{fila_firmas}",
+            f"A{fila_observaciones}",
+        ):
+            hoja[referencia].font = copy(fuente_datos)
 
         _establecer_texto(hoja, "D5", solicitud.cliente)
         _establecer_texto(hoja, "M5", _nombre_usuario(solicitud.solicitante))
@@ -248,18 +259,15 @@ def _rellenar_plantilla(
             _establecer_fecha(hoja, f"D{41 + extras}", prestamo.fecha_prestamo)
         _establecer_texto(
             hoja,
-            f"C{FILA_FIRMAS + extras}",
+            f"C{fila_firmas}",
             _nombre_usuario(
                 solicitud.revisado_por if previsualizacion else solicitud.resuelto_por
             ),
         )
         _establecer_texto(
             hoja,
-            f"G{FILA_FIRMAS + extras}",
+            f"G{fila_firmas}",
             prestamo.nombre_receptor if prestamo else solicitud.nombre_receptor,
-        )
-        hoja[f"G{FILA_FIRMAS + extras}"].font = copy(
-            hoja[f"C{FILA_FIRMAS + extras}"].font
         )
 
         if incluir_retorno:
@@ -275,7 +283,7 @@ def _rellenar_plantilla(
             )
             _establecer_texto(
                 hoja,
-                f"K{FILA_FIRMAS + extras}",
+                f"K{fila_firmas}",
                 prestamo.nombre_receptor,
             )
             usuarios_devolucion = sorted({
@@ -285,7 +293,7 @@ def _rellenar_plantilla(
             })
             _establecer_texto(
                 hoja,
-                f"O{FILA_FIRMAS + extras}",
+                f"O{fila_firmas}",
                 ", ".join(usuarios_devolucion),
             )
 
@@ -314,7 +322,7 @@ def _rellenar_plantilla(
                     )
         _establecer_texto(
             hoja,
-            f"A{FILA_OBSERVACIONES + extras}",
+            f"A{fila_observaciones}",
             "\n".join(observaciones),
         )
 

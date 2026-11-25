@@ -1,4 +1,5 @@
 import os
+from copy import copy
 from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -179,15 +180,10 @@ class PrestamoApiTests(APITestCase):
                 "observaciones": hoja["A46"].value,
                 "entrega_salida": hoja["C43"].value,
                 "recibe_salida": hoja["G43"].value,
-                "fuente_recibe_salida": hoja["G43"].font.name,
-                "fuente_entrega_salida": hoja["C43"].font.name,
-                "fuente_recibe_coincide": all(
-                    getattr(hoja["G43"].font, atributo)
-                    == getattr(hoja["C43"].font, atributo)
-                    for atributo in (
-                        *hoja["G43"].font.__attrs__,
-                        *hoja["G43"].font.__elements__,
-                    )
+                "fuente_cuerpo": copy(hoja["B10"].font),
+                "fuentes_campos": tuple(
+                    copy(hoja[referencia].font)
+                    for referencia in ("C43", "G43", "K43", "O43", "A46")
                 ),
                 "borde_cliente": tuple(
                     getattr(hoja["M5"].border, lado).style
@@ -731,7 +727,12 @@ class PrestamoApiTests(APITestCase):
             ("thin", None, None, "thin"),
         )
         self.assertEqual(formato_previo["formato_fecha_solicitud"], "yyyy-mm-dd")
-        self.assertTrue(formato_previo["fuente_recibe_coincide"])
+        self.assertTrue(
+            all(
+                fuente == formato_previo["fuente_cuerpo"]
+                for fuente in formato_previo["fuentes_campos"]
+            )
+        )
 
         response = self.client.post(
             reverse("solicitud-prestamo-aprobar", args=[solicitud.data["id"]]),
@@ -1247,6 +1248,12 @@ class PrestamoApiTests(APITestCase):
         self.assertEqual(formato_retorno["retornado"], 1)
         self.assertEqual(formato_retorno["estado"], "Bueno")
         self.assertEqual(formato_retorno["recibe_salida"], "Técnico de prueba")
+        self.assertTrue(
+            all(
+                fuente == formato_retorno["fuente_cuerpo"]
+                for fuente in formato_retorno["fuentes_campos"]
+            )
+        )
         descarga_prestamo = self.client.get(
             reverse("prestamo-formato-retorno", args=[prestamo_id]),
         )
