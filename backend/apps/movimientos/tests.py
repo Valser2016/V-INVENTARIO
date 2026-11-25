@@ -28,8 +28,20 @@ from apps.movimientos.models import (
     Prestamo,
     SolicitudPrestamo,
 )
-from apps.movimientos.pdf import _buscar_libreoffice
+from apps.movimientos.pdf import (
+    PLANTILLA_OYS_EMPAQUETADA,
+    _buscar_libreoffice,
+)
 from apps.usuarios.models import Rol
+
+
+class PlantillaOysTests(SimpleTestCase):
+    def test_copia_empaquetada_corresponde_a_la_plantilla_actual(self):
+        libro = load_workbook(PLANTILLA_OYS_EMPAQUETADA, read_only=True)
+        try:
+            self.assertEqual(libro.sheetnames, ["LISTADO"])
+        finally:
+            libro.close()
 
 
 class BuscarLibreOfficeTests(SimpleTestCase):

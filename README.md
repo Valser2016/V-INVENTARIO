@@ -120,12 +120,13 @@ formatos PDF; los activos que sigan prestados recuperan su estado y ubicación
 anteriores, y los ya devueltos conservan su estado actual.
 
 Los PDF se generan rellenando la hoja `LISTADO` de la plantilla y convirtiéndola
-con LibreOffice. Se usa el Excel versionado en la raíz del proyecto
-`OYS-FO-09 LISTADO DE HERRAMIENTAS PARA SERVICIOS (8).xlsx`, tanto localmente
-como en Railway. Si ese archivo no está disponible, se usa la copia incluida en
-`backend/apps/movimientos/OYS-FO-09.xlsx`. Para seleccionar otro Excel,
-configura `OYS_TEMPLATE_PATH`. El logo se incorpora como PNG para que también
-aparezca en la conversión a PDF. En Windows puedes instalar LibreOffice con:
+con LibreOffice. Localmente se usa el Excel versionado en la raíz del proyecto,
+`OYS-FO-09 LISTADO DE HERRAMIENTAS PARA SERVICIOS (8).xlsx`. El servicio de
+Railway usa `backend` como raíz, por lo que incluye la copia empaquetada
+`backend/apps/movimientos/OYS-FO-09.xlsx`, que debe mantenerse igual a la
+plantilla vigente. Para seleccionar otro Excel, configura `OYS_TEMPLATE_PATH`.
+El logo se incorpora como PNG para que también aparezca en la conversión a PDF.
+En Windows puedes instalar LibreOffice con:
 
 ```powershell
 winget install --id TheDocumentFoundation.LibreOffice --exact
