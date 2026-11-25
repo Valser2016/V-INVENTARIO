@@ -71,6 +71,7 @@ function SolicitudesPrestamo() {
     const [formularioAbierto, setFormularioAbierto] = useState(false);
     const [solicitudesAbiertas, setSolicitudesAbiertas] = useState(false);
     const [listasAbiertas, setListasAbiertas] = useState(false);
+    const [historialSolicitudesAbierto, setHistorialSolicitudesAbierto] = useState(false);
     const [modoSeleccion, setModoSeleccion] = useState("individual");
     const [listaSeleccionadaId, setListaSeleccionadaId] = useState("");
     const [avisoLista, setAvisoLista] = useState("");
@@ -502,6 +503,12 @@ function SolicitudesPrestamo() {
         "ubicacion_id",
         "ubicacion_nombre",
     );
+    const solicitudesEnCola = puedeAprobar
+        ? solicitudes.filter((solicitud) =>
+            ["PENDIENTE", "REVISADA"].includes(solicitud.estado))
+        : solicitudes;
+    const solicitudesResueltas = solicitudes.filter((solicitud) =>
+        ["APROBADA", "RECHAZADA"].includes(solicitud.estado));
 
     return (
         <div className={`page-container requests-page${esTecnicoSolicitante
@@ -1113,9 +1120,9 @@ function SolicitudesPrestamo() {
                             <span className="loading-spinner" />
                             <span>Cargando solicitudes...</span>
                         </div>
-                            ) : solicitudes.length ? (
+                            ) : solicitudesEnCola.length ? (
                         <div className="request-list">
-                            {solicitudes.map((solicitud) => (
+                            {solicitudesEnCola.map((solicitud) => (
                                 <article className="request-card" key={solicitud.id}>
                                     <header className="loan-card-header">
                                         <div>
@@ -1439,14 +1446,79 @@ function SolicitudesPrestamo() {
                         </div>
                             ) : (
                                 <p className="form-hint">
-                                    {puedeRevisar
-                                        ? "Todavía no hay solicitudes para revisar."
+                                    {puedeAprobar
+                                        ? "No hay solicitudes pendientes por aprobar."
+                                        : puedeRevisar
+                                            ? "Todavía no hay solicitudes para revisar."
                                         : "Todavía no has enviado solicitudes de préstamo."}
                                 </p>
                             )}
                         </section>
                     )}
                 </div>
+                {administrador && solicitudesResueltas.length > 0 && (
+                    <div className="request-section">
+                        <button
+                            className="request-section-toggle"
+                            type="button"
+                            aria-expanded={historialSolicitudesAbierto}
+                            aria-controls="historial-solicitudes-resueltas"
+                            onClick={() => setHistorialSolicitudesAbierto((abierto) => !abierto)}
+                        >
+                            <span>Historial de solicitudes resueltas ({solicitudesResueltas.length})</span>
+                            <span className="request-section-indicator" aria-hidden="true">
+                                {historialSolicitudesAbierto ? "−" : "+"}
+                            </span>
+                        </button>
+                        {historialSolicitudesAbierto && (
+                            <section
+                                className="card loan-history request-section-content"
+                                id="historial-solicitudes-resueltas"
+                            >
+                                <div className="card-header">
+                                    <h2>Solicitudes aprobadas o rechazadas</h2>
+                                    <p>Las solicitudes resueltas no aparecen en la cola de aprobación.</p>
+                                </div>
+                                <div className="request-list">
+                                    {solicitudesResueltas.map((solicitud) => (
+                                        <article className="request-card" key={solicitud.id}>
+                                            <header className="loan-card-header">
+                                                <div>
+                                                    <span className="eyebrow">
+                                                        SOLICITUD #{solicitud.id}
+                                                    </span>
+                                                    <h2>{solicitud.nombre_receptor}</h2>
+                                                </div>
+                                                <span
+                                                    className={`loan-status loan-status-${solicitud.estado.toLowerCase()}`}
+                                                >
+                                                    {solicitud.estado_nombre}
+                                                </span>
+                                            </header>
+                                            <div className="request-action-buttons">
+                                                <button
+                                                    className="btn btn-danger"
+                                                    type="button"
+                                                    disabled={
+                                                        resolviendoId !== null
+                                                        || eliminandoId !== null
+                                                    }
+                                                    onClick={() => eliminarSolicitud(solicitud)}
+                                                >
+                                                    {eliminandoId === solicitud.id
+                                                        ? "Eliminando..."
+                                                        : solicitud.prestamo_id
+                                                            ? "Eliminar solicitud y préstamo"
+                                                            : "Eliminar solicitud"}
+                                                </button>
+                                            </div>
+                                        </article>
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

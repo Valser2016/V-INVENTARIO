@@ -413,6 +413,52 @@ describe("Solicitudes de préstamo", () => {
         );
     });
 
+    it("mantiene solo solicitudes pendientes en la cola y separa el historial resuelto", async () => {
+        prepararRespuestas([
+            {
+                ...solicitud,
+                id: 21,
+                nombre_receptor: "Solicitud pendiente",
+            },
+            {
+                ...solicitud,
+                id: 22,
+                nombre_receptor: "Solicitud revisada",
+                estado: "REVISADA",
+                estado_nombre: "Revisada",
+            },
+            {
+                ...solicitud,
+                id: 23,
+                nombre_receptor: "Solicitud aprobada",
+                estado: "APROBADA",
+                estado_nombre: "Aprobada",
+            },
+            {
+                ...solicitud,
+                id: 24,
+                nombre_receptor: "Solicitud rechazada",
+                estado: "RECHAZADA",
+                estado_nombre: "Rechazada",
+            },
+        ]);
+        const user = userEvent.setup();
+        renderPage(true);
+
+        await abrirSolicitudes(user, "Solicitudes por aprobar");
+
+        expect(await screen.findByText("SOLICITUD #21")).toBeInTheDocument();
+        expect(screen.getByText("SOLICITUD #22")).toBeInTheDocument();
+        expect(screen.queryByText("SOLICITUD #23")).not.toBeInTheDocument();
+        expect(screen.queryByText("SOLICITUD #24")).not.toBeInTheDocument();
+
+        await user.click(screen.getByRole("button", {
+            name: "Historial de solicitudes resueltas (2)",
+        }));
+        expect(screen.getByText("SOLICITUD #23")).toBeInTheDocument();
+        expect(screen.getByText("SOLICITUD #24")).toBeInTheDocument();
+    });
+
     it("permite aprobar al rol autorizado sin permitir eliminar solicitudes", async () => {
         prepararRespuestas([{
             ...solicitud,
@@ -581,6 +627,9 @@ describe("Solicitudes de préstamo", () => {
         renderPage(true);
 
         await abrirSolicitudes(user, "Solicitudes por aprobar");
+        await user.click(await screen.findByRole("button", {
+            name: "Historial de solicitudes resueltas (1)",
+        }));
         await user.click(await screen.findByRole("button", {
             name: "Eliminar solicitud y préstamo",
         }));

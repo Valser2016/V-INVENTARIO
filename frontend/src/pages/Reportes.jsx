@@ -69,6 +69,7 @@ function Reportes() {
     const [datos, setDatos] = useState(null);
     const [cargando, setCargando] = useState(true);
     const [exportando, setExportando] = useState("");
+    const [descargandoPrestamoId, setDescargandoPrestamoId] = useState(null);
     const [error, setError] = useState("");
     const reporte = reportes.find((item) => item.key === tipo);
 
@@ -126,6 +127,7 @@ function Reportes() {
                 estado_prestamo: prestamo.estado,
                 total_activos: prestamo.total_activos,
                 activos_pendientes: prestamo.activos_pendientes,
+                formato_salida_disponible: prestamo.formato_salida_disponible,
                 activos: (Array.isArray(prestamo.detalles) ? prestamo.detalles : [])
                     .map((detalle) => detalle.codigo_interno)
                     .join(", "),
@@ -163,7 +165,33 @@ function Reportes() {
         }
     };
 
-    const camposFila = filas.length ? Object.keys(filas[0]) : [];
+    const descargarListadoHerramientas = async (prestamo) => {
+        setDescargandoPrestamoId(prestamo.id);
+        setError("");
+        try {
+            const respuesta = await api.get(
+                `/reportes/prestamos/${prestamo.id}/listado-herramientas/`,
+                { responseType: "blob" },
+            );
+            const blobUrl = URL.createObjectURL(respuesta.data);
+            const enlace = document.createElement("a");
+            enlace.href = blobUrl;
+            enlace.download = `OYS-FO-09-prestamo-${prestamo.id}-salida.pdf`;
+            document.body.appendChild(enlace);
+            enlace.click();
+            enlace.remove();
+            URL.revokeObjectURL(blobUrl);
+        } catch (requestError) {
+            console.error("Error descargando listado de herramientas:", requestError);
+            setError(mensajeDeError(requestError));
+        } finally {
+            setDescargandoPrestamoId(null);
+        }
+    };
+
+    const camposFila = filas.length
+        ? Object.keys(filas[0]).filter((campo) => campo !== "formato_salida_disponible")
+        : [];
 
     return (
         <section className="page-container">
@@ -313,7 +341,11 @@ function Reportes() {
                             <thead>
                                 <tr>{camposFila.map((campo) => (
                                     <th key={campo}>{columnas[campo] ?? campo}</th>
-                                ))}</tr>
+                                ))}
+                                    {tipo === "prestamos" && (
+                                        <th scope="col">Listado de herramientas</th>
+                                    )}
+                                </tr>
                             </thead>
                             <tbody>
                                 {filas.map((fila, indice) => (
@@ -321,6 +353,23 @@ function Reportes() {
                                         {camposFila.map((campo) => (
                                             <td key={campo}>{fila[campo] ?? "—"}</td>
                                         ))}
+                                        {tipo === "prestamos" && (
+                                            <td>
+                                                {fila.formato_salida_disponible ? (
+                                                    <button
+                                                        className="btn btn-secondary"
+                                                        type="button"
+                                                        aria-label={`Descargar listado de herramientas del préstamo ${fila.id}`}
+                                                        disabled={descargandoPrestamoId !== null}
+                                                        onClick={() => descargarListadoHerramientas(fila)}
+                                                    >
+                                                        {descargandoPrestamoId === fila.id
+                                                            ? "Descargando..."
+                                                            : "Descargar PDF"}
+                                                    </button>
+                                                ) : "No disponible"}
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>

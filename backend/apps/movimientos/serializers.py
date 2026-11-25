@@ -164,6 +164,7 @@ class PrestamoSerializer(serializers.ModelSerializer):
     activos_pendientes = serializers.SerializerMethodField()
     total_herramientas = serializers.SerializerMethodField()
     items_pendientes = serializers.SerializerMethodField()
+    formato_salida_disponible = serializers.SerializerMethodField()
     formato_retorno_disponible = serializers.SerializerMethodField()
 
     class Meta:
@@ -182,6 +183,7 @@ class PrestamoSerializer(serializers.ModelSerializer):
             "activos_pendientes",
             "total_herramientas",
             "items_pendientes",
+            "formato_salida_disponible",
             "formato_retorno_disponible",
             "detalles",
             "consumibles",
@@ -226,6 +228,10 @@ class PrestamoSerializer(serializers.ModelSerializer):
     def get_formato_retorno_disponible(self, obj):
         solicitud = getattr(obj, "solicitud", None)
         return bool(solicitud and solicitud.formato_retorno_pdf)
+
+    def get_formato_salida_disponible(self, obj):
+        solicitud = getattr(obj, "solicitud", None)
+        return bool(solicitud and solicitud.formato_salida_pdf)
 
 
 class ConsumiblePrestamoEntradaSerializer(serializers.Serializer):

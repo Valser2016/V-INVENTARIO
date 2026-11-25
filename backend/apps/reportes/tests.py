@@ -15,7 +15,7 @@ from apps.inventario.models import (
     TipoActivo,
     Ubicacion,
 )
-from apps.movimientos.models import DetallePrestamo, Prestamo
+from apps.movimientos.models import DetallePrestamo, Prestamo, SolicitudPrestamo
 from apps.usuarios.models import Rol
 
 
@@ -77,6 +77,67 @@ class ReportesApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data[0]["dias_vencido"], 3)
         self.assertEqual(response.data[0]["activos_pendientes"], "RPT-001")
+
+    def test_reporte_prestamos_permite_descargar_pdf_de_herramientas(self):
+        fecha_prevista = timezone.localdate() + timedelta(days=5)
+        prestamo = Prestamo.objects.create(
+            nombre_receptor="Colaborador",
+            documento_receptor="998877",
+            fecha_devolucion_prevista=fecha_prevista,
+            creado_por=self.admin,
+        )
+        SolicitudPrestamo.objects.create(
+            solicitante=self.admin,
+            nombre_receptor=prestamo.nombre_receptor,
+            documento_receptor=prestamo.documento_receptor,
+            fecha_devolucion_prevista=fecha_prevista,
+            motivo="Prueba de descarga",
+            estado=SolicitudPrestamo.Estado.APROBADA,
+            prestamo=prestamo,
+            formato_salida_pdf=b"%PDF-prueba",
+        )
+        prestamo_sin_pdf = Prestamo.objects.create(
+            nombre_receptor="Sin formato",
+            documento_receptor="112233",
+            fecha_devolucion_prevista=fecha_prevista,
+            creado_por=self.admin,
+        )
+
+        self.rol_consulta.puede_ver_reportes = True
+        self.rol_consulta.save(update_fields=["puede_ver_reportes"])
+        usuario_reportes = get_user_model().objects.create_user(
+            username="usuario-reportes",
+            password="UserPassword123!",
+            rol=self.rol_consulta,
+        )
+        self.client.force_authenticate(user=usuario_reportes)
+
+        reporte = self.client.get(reverse("reporte-prestamos"))
+        formatos = {
+            fila["id"]: fila["formato_salida_disponible"]
+            for fila in reporte.data
+        }
+        self.assertEqual(reporte.status_code, status.HTTP_200_OK)
+        self.assertTrue(formatos[prestamo.pk])
+        self.assertFalse(formatos[prestamo_sin_pdf.pk])
+
+        descarga = self.client.get(
+            reverse(
+                "reporte-prestamo-listado-herramientas",
+                kwargs={"pk": prestamo.pk},
+            )
+        )
+        self.assertEqual(descarga.status_code, status.HTTP_200_OK)
+        self.assertEqual(descarga["Content-Type"], "application/pdf")
+        self.assertEqual(descarga.content, b"%PDF-prueba")
+
+        no_disponible = self.client.get(
+            reverse(
+                "reporte-prestamo-listado-herramientas",
+                kwargs={"pk": prestamo_sin_pdf.pk},
+            )
+        )
+        self.assertEqual(no_disponible.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_exporta_a_excel_y_pdf(self):
         response_excel = self.client.get(

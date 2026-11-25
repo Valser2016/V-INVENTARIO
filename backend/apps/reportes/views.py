@@ -2,9 +2,11 @@ from io import BytesIO
 from xml.sax.saxutils import escape
 
 from django.db.models import Count, Q
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.utils.text import slugify
 from openpyxl import Workbook
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -17,7 +19,7 @@ from rest_framework.views import APIView
 
 from apps.inventario.estados import filtro_estado_prestado
 from apps.inventario.models import Activo
-from apps.movimientos.models import DetallePrestamo, Prestamo
+from apps.movimientos.models import DetallePrestamo, Prestamo, SolicitudPrestamo
 from apps.movimientos.serializers import PrestamoSerializer
 from apps.usuarios.permissions import PuedeConsultarReportes
 
@@ -111,7 +113,7 @@ def _fila_activo(activo):
 
 
 def _datos_prestamos(request):
-    prestamos = Prestamo.objects.prefetch_related(
+    prestamos = Prestamo.objects.select_related("solicitud").prefetch_related(
         "detalles__activo",
         "detalles__estado_devolucion",
         "detalles__ubicacion_devolucion",
@@ -236,6 +238,32 @@ class PrestamosReporteView(APIView):
 
     def get(self, request):
         return Response(_datos_prestamos(request))
+
+
+class DescargarListadoHerramientasPrestamoView(APIView):
+    permission_classes = [PuedeConsultarReportes]
+
+    def get(self, request, pk):
+        solicitud = get_object_or_404(
+            SolicitudPrestamo.objects.only(
+                "id",
+                "consecutivo",
+                "formato_salida_pdf",
+            ),
+            prestamo_id=pk,
+        )
+        if not solicitud.formato_salida_pdf:
+            raise Http404("El listado de herramientas todavía no está disponible.")
+
+        nombre = slugify(solicitud.consecutivo) or f"prestamo-{pk}"
+        response = HttpResponse(
+            bytes(solicitud.formato_salida_pdf),
+            content_type="application/pdf",
+        )
+        response["Content-Disposition"] = (
+            f'attachment; filename="OYS-FO-09-{nombre}-salida.pdf"'
+        )
+        return response
 
 
 class VencimientosReporteView(APIView):

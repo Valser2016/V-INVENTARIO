@@ -72,7 +72,13 @@ describe("Reportes", () => {
         });
     });
 
-    it("muestra préstamos cuando la respuesta está paginada", async () => {
+    it("muestra préstamos paginados y descarga su listado de herramientas", async () => {
+        const pdf = new Blob(["pdf"], { type: "application/pdf" });
+        vi.stubGlobal("URL", {
+            createObjectURL: vi.fn(() => "blob:prestamo"),
+            revokeObjectURL: vi.fn(),
+        });
+        const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
         vi.mocked(api.get).mockImplementation((url) => Promise.resolve({
             data: url === "/reportes/prestamos/" ? {
                 count: 1,
@@ -87,9 +93,10 @@ describe("Reportes", () => {
                     estado: "Vigente",
                     total_activos: 1,
                     activos_pendientes: 1,
+                    formato_salida_disponible: true,
                     detalles: [{ codigo_interno: "PC-001" }],
                 }],
-            } : [],
+            } : url === "/reportes/prestamos/12/listado-herramientas/" ? pdf : [],
         }));
         const user = userEvent.setup();
         render(<Reportes />);
@@ -98,6 +105,17 @@ describe("Reportes", () => {
 
         expect(await screen.findByText("Ana Pérez")).toBeInTheDocument();
         expect(screen.getByText("PC-001")).toBeInTheDocument();
+        await user.click(screen.getByRole("button", {
+            name: "Descargar listado de herramientas del préstamo 12",
+        }));
+
+        await waitFor(() => {
+            expect(api.get).toHaveBeenCalledWith(
+                "/reportes/prestamos/12/listado-herramientas/",
+                { responseType: "blob" },
+            );
+        });
+        expect(click).toHaveBeenCalled();
     });
 
     it("solicita y descarga el reporte en Excel", async () => {
