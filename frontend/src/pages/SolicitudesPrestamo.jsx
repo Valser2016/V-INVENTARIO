@@ -95,8 +95,6 @@ function SolicitudesPrestamo() {
     const [formulario, setFormulario] = useState({
         cliente: "",
         consecutivo: "",
-        nombre_receptor: "",
-        documento_receptor: "",
         fecha_devolucion_prevista: fechaMinimaPrestamo(),
         motivo: "",
         observaciones: "",
@@ -367,8 +365,6 @@ function SolicitudesPrestamo() {
             setFormulario({
                 cliente: "",
                 consecutivo: "",
-                nombre_receptor: "",
-                documento_receptor: "",
                 fecha_devolucion_prevista: fechaMinimaPrestamo(),
                 motivo: "",
                 observaciones: "",
@@ -951,32 +947,6 @@ function SolicitudesPrestamo() {
                                 />
                             </div>
                             <div className="form-group">
-                                <label htmlFor="solicitud-receptor">Nombre del colaborador</label>
-                                <input
-                                    id="solicitud-receptor"
-                                    value={formulario.nombre_receptor}
-                                    onChange={(event) => cambiarCampo(
-                                        "nombre_receptor",
-                                        event.target.value,
-                                    )}
-                                    maxLength={150}
-                                    required
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label htmlFor="solicitud-documento">Documento</label>
-                                <input
-                                    id="solicitud-documento"
-                                    value={formulario.documento_receptor}
-                                    onChange={(event) => cambiarCampo(
-                                        "documento_receptor",
-                                        event.target.value,
-                                    )}
-                                    maxLength={30}
-                                    required
-                                />
-                            </div>
-                            <div className="form-group">
                                 <label htmlFor="solicitud-fecha">Fecha prevista de devolución</label>
                                 <input
                                     id="solicitud-fecha"
@@ -1263,12 +1233,12 @@ function SolicitudesPrestamo() {
                                                 <dd>{formulario.consecutivo}</dd>
                                             </div>
                                             <div>
-                                                <dt>Colaborador</dt>
-                                                <dd>{formulario.nombre_receptor}</dd>
+                                                <dt>Solicitante</dt>
+                                                <dd>{perfil?.nombre_completo || "No disponible"}</dd>
                                             </div>
                                             <div>
                                                 <dt>Documento</dt>
-                                                <dd>{formulario.documento_receptor}</dd>
+                                                <dd>{perfil?.documento || "No registrado"}</dd>
                                             </div>
                                             <div>
                                                 <dt>Devolución prevista</dt>

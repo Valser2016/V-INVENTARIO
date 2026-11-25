@@ -106,6 +106,7 @@ const renderPage = (administrador = false, permisosAdicionales = {}) => render(
         perfil: {
             es_administrador: administrador,
             nombre_completo: administrador ? "Administración" : "Técnico de pruebas",
+            documento: administrador ? "123456" : "654321",
             permisos: {
                 puede_ver_movimientos: true,
                 ...permisosAdicionales,
@@ -130,12 +131,6 @@ const completarDatosSolicitud = (datos = {}) => {
     });
     fireEvent.change(screen.getByLabelText("Consecutivo del servicio"), {
         target: { value: datos.consecutivo || "OS-1001" },
-    });
-    fireEvent.change(screen.getByLabelText("Nombre del colaborador"), {
-        target: { value: datos.colaborador || "Técnico de pruebas" },
-    });
-    fireEvent.change(screen.getByLabelText("Documento"), {
-        target: { value: datos.documento || "654321" },
     });
     fireEvent.change(screen.getByLabelText("¿Para qué necesitas los activos?"), {
         target: { value: datos.motivo || "Trabajo en planta" },
@@ -213,6 +208,12 @@ describe("Solicitudes de préstamo", () => {
         expect(screen.getByLabelText("Confirmación de la solicitud")).toHaveTextContent(
             "PC-008 — Portátil de pruebas",
         );
+        expect(screen.getByLabelText("Confirmación de la solicitud")).toHaveTextContent(
+            "Técnico de pruebas",
+        );
+        expect(screen.getByLabelText("Confirmación de la solicitud")).toHaveTextContent(
+            "654321",
+        );
         await user.click(screen.getByRole("button", { name: "Enviar solicitud" }));
 
         await waitFor(() => {
@@ -221,8 +222,6 @@ describe("Solicitudes de préstamo", () => {
                 expect.objectContaining({
                     cliente: "Acme Industrial",
                     consecutivo: "OS-1001",
-                    nombre_receptor: "Técnico de pruebas",
-                    documento_receptor: "654321",
                     motivo: "Trabajo en planta",
                     activos: [8],
                     consumibles: [{
@@ -232,6 +231,8 @@ describe("Solicitudes de préstamo", () => {
                 }),
             );
         });
+        expect(api.post.mock.calls[0][1]).not.toHaveProperty("nombre_receptor");
+        expect(api.post.mock.calls[0][1]).not.toHaveProperty("documento_receptor");
         expect(await screen.findByRole("status")).toHaveTextContent(
             "Tu solicitud fue enviada a revisión.",
         );
@@ -314,7 +315,6 @@ describe("Solicitudes de préstamo", () => {
         }));
         completarDatosSolicitud({
             consecutivo: "OS-1003",
-            colaborador: "Administración",
         });
         await user.click(screen.getByRole("button", {
             name: "Adicionar consumibles",
@@ -336,7 +336,6 @@ describe("Solicitudes de préstamo", () => {
                 expect.objectContaining({
                     cliente: "Acme Industrial",
                     consecutivo: "OS-1003",
-                    nombre_receptor: "Administración",
                     activos: [8],
                     consumibles: [{
                         nombre: "Cinta aislante",
@@ -358,7 +357,6 @@ describe("Solicitudes de préstamo", () => {
         await user.click(screen.getByRole("button", { name: "Nueva solicitud" }));
         completarDatosSolicitud({
             consecutivo: "OS-1004",
-            colaborador: "Técnico",
         });
         await user.click(screen.getByRole("button", {
             name: "Adicionar consumibles",
@@ -399,7 +397,6 @@ describe("Solicitudes de préstamo", () => {
         await user.click(screen.getByRole("button", { name: "Nueva solicitud" }));
         completarDatosSolicitud({
             consecutivo: "OS-1002",
-            colaborador: "Técnico",
         });
         await avanzarASeleccionHerramientas(user);
         await user.click(screen.getByLabelText("Listado predeterminado"));

@@ -161,13 +161,22 @@ class UsuarioAdminSerializer(serializers.ModelSerializer):
 
 class PerfilSerializer(serializers.ModelSerializer):
     nombre_completo = serializers.SerializerMethodField()
+    documento = serializers.CharField(read_only=True, allow_null=True)
     rol_nombre = serializers.CharField(source="rol.nombre", read_only=True, allow_null=True)
     es_administrador = serializers.SerializerMethodField()
     permisos = serializers.SerializerMethodField()
 
     class Meta:
         model = Usuario
-        fields = ["id", "username", "nombre_completo", "rol_nombre", "es_administrador", "permisos"]
+        fields = [
+            "id",
+            "username",
+            "nombre_completo",
+            "documento",
+            "rol_nombre",
+            "es_administrador",
+            "permisos",
+        ]
 
     def get_nombre_completo(self, obj):
         return f"{obj.first_name} {obj.last_name}".strip() or obj.username

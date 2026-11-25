@@ -92,6 +92,9 @@ class PrestamoApiTests(APITestCase):
         self.usuario = user_model.objects.create_user(
             username="inventario",
             password="Password123!",
+            first_name="Administrador",
+            last_name="de pruebas",
+            documento="12345678",
             rol=self.rol,
         )
         self.client.force_authenticate(user=self.usuario)
@@ -136,6 +139,9 @@ class PrestamoApiTests(APITestCase):
         self.tecnico = user_model.objects.create_user(
             username="tecnico",
             password="Password123!",
+            first_name="Técnico",
+            last_name="de prueba",
+            documento="654321",
             rol=self.rol_tecnico,
         )
         self.almacenista = user_model.objects.create_user(
@@ -143,6 +149,7 @@ class PrestamoApiTests(APITestCase):
             password="Password123!",
             first_name="Almacén",
             last_name="Pruebas",
+            documento="987654",
             rol=self.rol_almacen,
         )
 
@@ -238,8 +245,6 @@ class PrestamoApiTests(APITestCase):
         return {
             "cliente": "Cliente de prueba",
             "consecutivo": consecutivo,
-            "nombre_receptor": "Técnico de prueba",
-            "documento_receptor": "654321",
             "fecha_devolucion_prevista": (
                 timezone.localdate() + timedelta(days=2)
             ).isoformat(),
@@ -362,6 +367,8 @@ class PrestamoApiTests(APITestCase):
             format="json",
         )
         self.assertEqual(solicitud.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(solicitud.data["nombre_receptor"], "Administrador de pruebas")
+        self.assertEqual(solicitud.data["documento_receptor"], "12345678")
         self.assertEqual(
             [
                 (item["nombre"], item["cantidad"])
@@ -625,12 +632,50 @@ class PrestamoApiTests(APITestCase):
         self.assertEqual(response.data["solicitante_usuario"], "tecnico")
         self.assertEqual(response.data["cliente"], "Cliente de prueba")
         self.assertEqual(response.data["consecutivo"], "OS-1001")
+        self.assertEqual(response.data["nombre_receptor"], "Técnico de prueba")
+        self.assertEqual(response.data["documento_receptor"], "654321")
         self.assertEqual(len(response.data["activos"]), 1)
         self.assertEqual(response.data["activos"][0]["condicion"], "")
         self.assertEqual(SolicitudPrestamo.objects.count(), 1)
         self.assertFalse(self.activo_1.historial_prestamos.exists())
         self.activo_1.refresh_from_db()
         self.assertEqual(self.activo_1.estado, self.disponible)
+
+    def test_solicitud_toma_nombre_y_documento_del_usuario_autenticado(self):
+        self.client.force_authenticate(user=self.tecnico)
+        payload = self.crear_payload_solicitud()
+        payload["nombre_receptor"] = "Nombre enviado por formulario"
+        payload["documento_receptor"] = "000000"
+
+        response = self.client.post(
+            reverse("solicitud-prestamo-list"),
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["nombre_receptor"], "Técnico de prueba")
+        self.assertEqual(response.data["documento_receptor"], "654321")
+
+    def test_solicitud_informa_si_el_perfil_no_tiene_documento(self):
+        self.tecnico.documento = ""
+        self.tecnico.save(update_fields=["documento"])
+        self.client.force_authenticate(user=self.tecnico)
+
+        response = self.client.post(
+            reverse("solicitud-prestamo-list"),
+            self.crear_payload_solicitud(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.data["detail"][0],
+            (
+                "Tu usuario no tiene un documento registrado. "
+                "Solicita al administrador que complete tu perfil."
+            ),
+        )
 
     def test_tecnico_solo_consulta_sus_solicitudes(self):
         self.client.force_authenticate(user=self.tecnico)
@@ -641,6 +686,9 @@ class PrestamoApiTests(APITestCase):
         )
         otro_tecnico = get_user_model().objects.create_user(
             username="otro-tecnico",
+            first_name="Otro",
+            last_name="Técnico",
+            documento="111111",
             rol=self.rol_tecnico,
         )
         self.client.force_authenticate(user=otro_tecnico)

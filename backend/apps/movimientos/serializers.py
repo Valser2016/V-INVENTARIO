@@ -520,8 +520,6 @@ class CrearSolicitudPrestamoSerializer(serializers.ModelSerializer):
         fields = [
             "cliente",
             "consecutivo",
-            "nombre_receptor",
-            "documento_receptor",
             "fecha_devolucion_prevista",
             "motivo",
             "observaciones",
@@ -591,6 +589,14 @@ class CrearSolicitudPrestamoSerializer(serializers.ModelSerializer):
         return activos
 
     def validate(self, attrs):
+        usuario = self.context["request"].user
+        if not usuario.documento or not usuario.documento.strip():
+            raise serializers.ValidationError({
+                "detail": (
+                    "Tu usuario no tiene un documento registrado. "
+                    "Solicita al administrador que complete tu perfil."
+                )
+            })
         if not attrs.get("activos") and not attrs.get("consumibles"):
             raise serializers.ValidationError(
                 "Selecciona al menos un activo o agrega un consumible."
@@ -600,9 +606,12 @@ class CrearSolicitudPrestamoSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         activos = validated_data.pop("activos", [])
         consumibles = validated_data.pop("consumibles", [])
+        solicitante = self.context["request"].user
         solicitud = SolicitudPrestamo.objects.create(
             **validated_data,
-            solicitante=self.context["request"].user,
+            solicitante=solicitante,
+            nombre_receptor=str(solicitante),
+            documento_receptor=solicitante.documento.strip(),
         )
         solicitud.activos.set(activos)
         RevisionActivoSolicitud.objects.bulk_create([
