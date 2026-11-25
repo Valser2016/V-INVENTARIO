@@ -17,6 +17,20 @@ vi.mock("../services/api", () => ({
     },
 }));
 
+vi.mock("../components/activo/LectorQr", () => ({
+    default: ({ alLeerCodigo, alCerrar }) => (
+        <div role="dialog" aria-label="Lector QR de prueba">
+            <button type="button" onClick={() => alLeerCodigo("pc-008")}>
+                Simular lectura de PC-008
+            </button>
+            <button type="button" onClick={() => alLeerCodigo("NO-EXISTE")}>
+                Simular lectura de un código no disponible
+            </button>
+            <button type="button" onClick={alCerrar}>Cerrar lector</button>
+        </div>
+    ),
+}));
+
 const activo = {
     id: 8,
     codigo_interno: "PC-008",
@@ -205,6 +219,44 @@ describe("Solicitudes de préstamo", () => {
         expect(await screen.findByRole("button", {
             name: "Mis solicitudes",
         })).toHaveAttribute("aria-expanded", "true");
+    });
+
+    it("agrega a la solicitud la herramienta disponible leída por QR", async () => {
+        prepararRespuestas();
+        const user = userEvent.setup();
+        renderPage();
+
+        await user.click(screen.getByRole("button", { name: "Nueva solicitud" }));
+        await user.click(await screen.findByRole("button", {
+            name: "Leer QR con cámara",
+        }));
+        await user.click(screen.getByRole("button", {
+            name: "Simular lectura de PC-008",
+        }));
+
+        expect(screen.getByLabelText(/PC-008 — Portátil de pruebas/)).toBeChecked();
+        expect(screen.getByRole("status")).toHaveTextContent(
+            "PC-008 se agregó a la solicitud.",
+        );
+    });
+
+    it("rechaza códigos QR que no son herramientas disponibles", async () => {
+        prepararRespuestas();
+        const user = userEvent.setup();
+        renderPage();
+
+        await user.click(screen.getByRole("button", { name: "Nueva solicitud" }));
+        await user.click(await screen.findByRole("button", {
+            name: "Leer QR con cámara",
+        }));
+        await user.click(screen.getByRole("button", {
+            name: "Simular lectura de un código no disponible",
+        }));
+
+        expect(screen.getByRole("status")).toHaveTextContent(
+            "El código NO-EXISTE no corresponde a una herramienta disponible para préstamo.",
+        );
+        expect(screen.getByLabelText(/PC-008 — Portátil de pruebas/)).not.toBeChecked();
     });
 
     it("permite al administrador crear una solicitud para luego revisarla y aprobarla", async () => {

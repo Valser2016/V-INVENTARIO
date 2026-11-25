@@ -9,6 +9,7 @@ import {
     SeccionObservaciones,
 } from "../components/activo/FormularioActivo";
 import FichaVidaActivo from "../components/activo/FichaVidaActivo";
+import EtiquetaQrActivo from "../components/activo/EtiquetaQrActivo";
 import { crearFormDataActivo } from "../utils/activoFormData";
 
 const formularioVacio = () => ({
@@ -76,6 +77,7 @@ function ListadoActivos() {
     const [cargandoFormulario, setCargandoFormulario] = useState(false);
     const [guardando, setGuardando] = useState(false);
     const [descargandoHoja, setDescargandoHoja] = useState(false);
+    const [activosQrPorImprimir, setActivosQrPorImprimir] = useState([]);
 
     useEffect(() => {
         let cancelado = false;
@@ -342,6 +344,24 @@ function ListadoActivos() {
         }
     };
 
+    const imprimirQr = () => {
+        window.print();
+    };
+
+    const imprimirQrsPagina = () => {
+        const activosPagina = pagina?.results ?? [];
+        if (!activosPagina.length) {
+            return;
+        }
+        setActivosQrPorImprimir(activosPagina);
+        window.addEventListener(
+            "afterprint",
+            () => setActivosQrPorImprimir([]),
+            { once: true },
+        );
+        window.setTimeout(() => window.print(), 0);
+    };
+
     const eliminarActivo = async (activo) => {
         if (!window.confirm(
             `¿Eliminar permanentemente el activo ${activo.codigo_interno}? Esta acción no se puede deshacer.`,
@@ -378,14 +398,23 @@ function ListadoActivos() {
         }
     };
 
+    const paginasQr = [];
+    for (let inicio = 0; inicio < activosQrPorImprimir.length; inicio += 9) {
+        paginasQr.push(activosQrPorImprimir.slice(inicio, inicio + 9));
+    }
+
     return (
-        <div className="page-container">
+        <div className={`page-container${activosQrPorImprimir.length
+            ? " printing-qr-batch"
+            : ""}`}
+        >
             {activoVisto && (
                 <FichaVidaActivo
                     activo={activoVisto}
                     alCerrar={() => setActivoVisto(null)}
                     alDescargar={() => descargarHojaVida(activoVisto)}
                     descargando={descargandoHoja}
+                    alImprimirQr={imprimirQr}
                 />
             )}
             <header className="page-header">
@@ -397,7 +426,32 @@ function ListadoActivos() {
                 <span className="record-count">
                     {pagina ? `${pagina.count} registros` : "Inventario"}
                 </span>
+                <button
+                    className="btn btn-secondary"
+                    type="button"
+                    disabled={!pagina?.results?.length || cargando}
+                    onClick={imprimirQrsPagina}
+                >
+                    Imprimir QRs de esta página ({pagina?.results?.length ?? 0})
+                </button>
             </header>
+
+            {activosQrPorImprimir.length > 0 && (
+                <div className="inventory-qr-print">
+                    {paginasQr.map((paginaQr, indice) => (
+                        <section
+                            className={`inventory-qr-print-page${indice < paginasQr.length - 1
+                                ? " inventory-qr-print-page-next"
+                                : ""}`}
+                            key={paginaQr[0].id}
+                        >
+                            {paginaQr.map((activo) => (
+                                <EtiquetaQrActivo key={activo.id} activo={activo} />
+                            ))}
+                        </section>
+                    ))}
+                </div>
+            )}
 
             {error && (
                 <div className="alert alert-error" role="alert">

@@ -114,6 +114,13 @@ Administración asigna por separado los permisos de **Modificar inventario**,
 no puede administrar usuarios ni roles. Otros roles solo reciben las capacidades
 que se les asignen.
 
+En **Inventario**, se pueden imprimir las etiquetas QR de la página actual o
+abrir la ficha de un activo e imprimir su etiqueta individual. Cada QR contiene
+el código interno del activo. Al crear una solicitud, **Leer QR con cámara**
+agrega automáticamente las herramientas disponibles; la búsqueda manual sigue
+disponible como alternativa. El navegador necesita permiso para usar la cámara y
+la aplicación debe servirse por HTTPS (o desde `localhost` en desarrollo).
+
 Administración puede eliminar permanentemente solicitudes y préstamos de prueba.
 Al eliminar un préstamo también se borran la solicitud vinculada, sus detalles y
 formatos PDF; los activos que sigan prestados recuperan su estado y ubicación

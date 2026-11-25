@@ -6,6 +6,7 @@ import {
     alternarActivoSeleccionado,
     fechaMinimaPrestamo,
 } from "../utils/prestamos";
+import LectorQr from "../components/activo/LectorQr";
 
 const errorApi = (error) => {
     const data = error.response?.data;
@@ -64,6 +65,8 @@ function SolicitudesPrestamo() {
     const [resolviendoId, setResolviendoId] = useState(null);
     const [eliminandoId, setEliminandoId] = useState(null);
     const [descargandoFormato, setDescargandoFormato] = useState("");
+    const [lectorQrAbierto, setLectorQrAbierto] = useState(false);
+    const [avisoQr, setAvisoQr] = useState("");
     const [rechazos, setRechazos] = useState({});
     const [revisiones, setRevisiones] = useState({});
     const [error, setError] = useState("");
@@ -148,6 +151,32 @@ function SolicitudesPrestamo() {
             "activos",
             alternarActivoSeleccionado(formulario.activos, id)
         );
+    };
+
+    const agregarActivoPorQr = (codigoLeido) => {
+        const codigo = codigoLeido.trim();
+        const activo = activos.find(
+            (item) => item.codigo_interno.toLocaleLowerCase()
+                === codigo.toLocaleLowerCase(),
+        );
+        if (!activo) {
+            const aviso = (
+                `El código ${codigo} no corresponde a una herramienta disponible para préstamo.`
+            );
+            setAvisoQr(aviso);
+            return aviso;
+        }
+        if (formulario.activos.includes(activo.id)) {
+            const aviso = `${activo.codigo_interno} ya está en la solicitud.`;
+            setAvisoQr(aviso);
+            return aviso;
+        }
+
+        seleccionarModo("individual");
+        cambiarCampo("activos", [...formulario.activos, activo.id]);
+        const aviso = `${activo.codigo_interno} se agregó a la solicitud.`;
+        setAvisoQr(aviso);
+        return aviso;
     };
 
     const agregarConsumible = () => {
@@ -515,6 +544,12 @@ function SolicitudesPrestamo() {
             ? " requests-page-technician"
             : ""}`}
         >
+            {lectorQrAbierto && (
+                <LectorQr
+                    alLeerCodigo={agregarActivoPorQr}
+                    alCerrar={() => setLectorQrAbierto(false)}
+                />
+            )}
             <header className="page-header">
                 <div>
                     <span className="eyebrow">GESTIÓN DE ACTIVOS</span>
@@ -957,6 +992,19 @@ function SolicitudesPrestamo() {
                                                     )}
                                                 />
                                             </div>
+                                            <div className="form-group asset-qr-action">
+                                                <span>Escaneo rápido</span>
+                                                <button
+                                                    className="btn btn-secondary"
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setAvisoQr("");
+                                                        setLectorQrAbierto(true);
+                                                    }}
+                                                >
+                                                    Leer QR con cámara
+                                                </button>
+                                            </div>
                                             <div className="form-group">
                                                 <label htmlFor="filtro-tipo-activo">Tipo</label>
                                                 <select
@@ -1016,6 +1064,9 @@ function SolicitudesPrestamo() {
                                                 </select>
                                             </div>
                                         </div>
+                                        {avisoQr && (
+                                            <p className="form-hint" role="status">{avisoQr}</p>
+                                        )}
                                         {avisoLista && (
                                             <p className="form-hint" role="status">{avisoLista}</p>
                                         )}

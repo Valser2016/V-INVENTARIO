@@ -1,4 +1,5 @@
 import React from "react";
+import EtiquetaQrActivo from "./EtiquetaQrActivo";
 import FotoActivo from "./FotoActivo";
 
 const mostrarFecha = (fecha) => {
@@ -15,7 +16,13 @@ const mostrarValor = (valor) => {
     }).format(Number(valor));
 };
 
-function FichaVidaActivo({ activo, alCerrar, alDescargar, descargando }) {
+function FichaVidaActivo({
+    activo,
+    alCerrar,
+    alDescargar,
+    descargando,
+    alImprimirQr,
+}) {
     const campos = [
         ["Nombre", activo.nombre],
         ["Tipo de activo", activo.tipo_activo_nombre],
@@ -75,12 +82,22 @@ function FichaVidaActivo({ activo, alCerrar, alDescargar, descargando }) {
                 <div className="asset-sheet-actions">
                     <button
                         type="button"
+                        className="btn btn-secondary"
+                        onClick={alImprimirQr}
+                    >
+                        Imprimir QR
+                    </button>
+                    <button
+                        type="button"
                         className="btn btn-primary"
                         disabled={descargando}
                         onClick={alDescargar}
                     >
                         {descargando ? "Generando Excel..." : "Descargar OYS-FO-11"}
                     </button>
+                </div>
+                <div className="asset-qr-print">
+                    <EtiquetaQrActivo activo={activo} />
                 </div>
             </section>
         </div>

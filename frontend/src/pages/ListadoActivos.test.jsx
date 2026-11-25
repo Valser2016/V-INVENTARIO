@@ -142,9 +142,41 @@ describe("Edición de inventario", () => {
         const ficha = await screen.findByRole("dialog");
         expect(ficha).toBeInTheDocument();
         expect(within(ficha).getByText("Hoja de vida del activo")).toBeInTheDocument();
-        expect(within(ficha).getByText("Equipo original")).toBeInTheDocument();
+        expect(within(ficha).getByText(
+            "Equipo original",
+            { selector: "dd" },
+        )).toBeInTheDocument();
         expect(within(ficha).getByText("Marca", { selector: "dd" })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Descargar OYS-FO-11" })).toBeInTheDocument();
+    });
+
+    it("imprime el código QR del activo desde su hoja de vida", async () => {
+        prepararRespuestas();
+        const imprimir = vi.fn();
+        vi.stubGlobal("print", imprimir);
+        const user = userEvent.setup();
+        renderPage();
+
+        await user.click(await screen.findByRole("button", { name: "Ver" }));
+        const ficha = await screen.findByRole("dialog");
+        expect(within(ficha).getByLabelText("Código QR PC-001")).toBeInTheDocument();
+        await user.click(within(ficha).getByRole("button", { name: "Imprimir QR" }));
+
+        await waitFor(() => expect(imprimir).toHaveBeenCalledOnce());
+    });
+
+    it("imprime los códigos QR de los activos de la página actual", async () => {
+        prepararRespuestas();
+        const imprimir = vi.fn();
+        vi.stubGlobal("print", imprimir);
+        const user = userEvent.setup();
+        renderPage();
+
+        await user.click(await screen.findByRole("button", {
+            name: "Imprimir QRs de esta página (1)",
+        }));
+
+        await waitFor(() => expect(imprimir).toHaveBeenCalledOnce());
     });
 
     it("descarga la hoja de vida en formato OYS-FO-11", async () => {
