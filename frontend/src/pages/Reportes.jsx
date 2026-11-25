@@ -18,6 +18,7 @@ const columnas = {
     serie: "Serie",
     valor: "Valor",
     id: "Préstamo",
+    numero_solicitud: "Solicitud #",
     prestamo: "Préstamo",
     nombre_receptor: "Receptor",
     receptor: "Receptor",
@@ -119,7 +120,8 @@ function Reportes() {
                     ? datos.results
                     : [];
             return prestamos.map((prestamo) => ({
-                id: prestamo.id,
+                numero_solicitud: prestamo.numero_solicitud,
+                prestamo_id: prestamo.id,
                 nombre_receptor: prestamo.nombre_receptor,
                 documento_receptor: prestamo.documento_receptor,
                 fecha_prestamo: prestamo.fecha_prestamo?.slice(0, 10),
@@ -170,17 +172,22 @@ function Reportes() {
         const esRetorno = tipoFormato === "retorno";
         const endpoint = esRetorno ? "formato-retorno" : "listado-herramientas";
         const sufijo = esRetorno ? "retorno" : "salida";
-        setDescargandoFormato({ id: prestamo.id, tipo: tipoFormato });
+        setDescargandoFormato({
+            id: prestamo.prestamo_id,
+            tipo: tipoFormato,
+        });
         setError("");
         try {
             const respuesta = await api.get(
-                `/reportes/prestamos/${prestamo.id}/${endpoint}/`,
+                `/reportes/prestamos/${prestamo.prestamo_id}/${endpoint}/`,
                 { responseType: "blob" },
             );
             const blobUrl = URL.createObjectURL(respuesta.data);
             const enlace = document.createElement("a");
             enlace.href = blobUrl;
-            enlace.download = `OYS-FO-09-prestamo-${prestamo.id}-${sufijo}.pdf`;
+            enlace.download = (
+                `OYS-FO-09-prestamo-${prestamo.prestamo_id}-${sufijo}.pdf`
+            );
             document.body.appendChild(enlace);
             enlace.click();
             enlace.remove();
@@ -197,6 +204,7 @@ function Reportes() {
         ? Object.keys(filas[0]).filter((campo) => (
             campo !== "formato_salida_disponible"
             && campo !== "formato_retorno_disponible"
+            && campo !== "prestamo_id"
         ))
         : [];
 
@@ -359,7 +367,13 @@ function Reportes() {
                             </thead>
                             <tbody>
                                 {filas.map((fila, indice) => (
-                                    <tr key={fila.codigo ?? fila.id ?? fila.prestamo ?? indice}>
+                                    <tr key={
+                                        fila.codigo
+                                        ?? fila.prestamo_id
+                                        ?? fila.id
+                                        ?? fila.prestamo
+                                        ?? indice
+                                    }>
                                         {camposFila.map((campo) => (
                                             <td key={campo}>{fila[campo] ?? "—"}</td>
                                         ))}
@@ -370,14 +384,14 @@ function Reportes() {
                                                         <button
                                                             className="btn btn-secondary"
                                                             type="button"
-                                                            aria-label={`Descargar listado de herramientas del préstamo ${fila.id}`}
+                                                            aria-label={`Descargar listado de herramientas del préstamo ${fila.prestamo_id}`}
                                                             disabled={descargandoFormato !== null}
                                                             onClick={() => descargarFormatoPrestamo(
                                                                 fila,
                                                                 "salida",
                                                             )}
                                                         >
-                                                            {descargandoFormato?.id === fila.id
+                                                            {descargandoFormato?.id === fila.prestamo_id
                                                                 && descargandoFormato.tipo === "salida"
                                                                 ? "Descargando..."
                                                                 : "Descargar PDF"}
@@ -389,14 +403,14 @@ function Reportes() {
                                                         <button
                                                             className="btn btn-secondary"
                                                             type="button"
-                                                            aria-label={`Descargar formato de devolución del préstamo ${fila.id}`}
+                                                            aria-label={`Descargar formato de devolución del préstamo ${fila.prestamo_id}`}
                                                             disabled={descargandoFormato !== null}
                                                             onClick={() => descargarFormatoPrestamo(
                                                                 fila,
                                                                 "retorno",
                                                             )}
                                                         >
-                                                            {descargandoFormato?.id === fila.id
+                                                            {descargandoFormato?.id === fila.prestamo_id
                                                                 && descargandoFormato.tipo === "retorno"
                                                                 ? "Descargando..."
                                                                 : "Descargar PDF"}

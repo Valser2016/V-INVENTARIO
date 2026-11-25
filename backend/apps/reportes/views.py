@@ -21,7 +21,11 @@ from apps.inventario.estados import filtro_estado_prestado
 from apps.inventario.models import Activo
 from apps.movimientos.models import DetallePrestamo, Prestamo, SolicitudPrestamo
 from apps.movimientos.serializers import PrestamoSerializer
-from apps.usuarios.permissions import PuedeConsultarReportes
+from apps.usuarios.permissions import (
+    PuedeConsultarReportes,
+    es_administrador,
+    puede_consultar,
+)
 
 
 ETIQUETAS_COLUMNAS = {
@@ -34,6 +38,7 @@ ETIQUETAS_COLUMNAS = {
     "serie": "Número de serie",
     "valor": "Valor",
     "id": "Préstamo",
+    "numero_solicitud": "Solicitud #",
     "prestamo": "Préstamo",
     "nombre_receptor": "Receptor",
     "receptor": "Receptor",
@@ -113,13 +118,45 @@ def _fila_activo(activo):
 
 
 def _datos_prestamos(request):
-    prestamos = Prestamo.objects.select_related("solicitud").prefetch_related(
-        "detalles__activo",
-        "detalles__estado_devolucion",
-        "detalles__ubicacion_devolucion",
+    prestamos = list(
+        Prestamo.objects.select_related("solicitud").prefetch_related(
+            "detalles__activo",
+            "detalles__estado_devolucion",
+            "detalles__ubicacion_devolucion",
+        )
     )
     serializer = PrestamoSerializer(prestamos, many=True)
-    resultados = serializer.data
+    resultados = list(serializer.data)
+    solicitudes_visibles = SolicitudPrestamo.objects.all()
+    puede_ver_todas = (
+        es_administrador(request.user)
+        or puede_consultar(
+            request.user,
+            "puede_revisar_solicitudes_prestamo",
+        )
+        or puede_consultar(
+            request.user,
+            "puede_aprobar_solicitudes_prestamo",
+        )
+    )
+    if not puede_ver_todas:
+        solicitudes_visibles = solicitudes_visibles.filter(
+            solicitante=request.user,
+        )
+    numeros_visibles = {
+        solicitud_id: numero
+        for numero, solicitud_id in enumerate(
+            solicitudes_visibles.order_by("id").values_list("id", flat=True),
+            start=1,
+        )
+    }
+    for prestamo, resultado in zip(prestamos, resultados):
+        solicitud = getattr(prestamo, "solicitud", None)
+        resultado["numero_solicitud"] = (
+            numeros_visibles.get(solicitud.pk)
+            if solicitud is not None
+            else None
+        )
     estado = request.query_params.get("estado", "").strip().casefold()
     if estado and estado != "todos":
         resultados = [
@@ -316,6 +353,12 @@ class ExportarReporteView(APIView):
 
         datos = obtener_datos[tipo]()
         columnas = list(datos[0]) if datos else self.columnas_vacias(tipo)
+        if tipo == "prestamos":
+            columnas = ["numero_solicitud"] + [
+                columna
+                for columna in columnas
+                if columna not in {"id", "numero_solicitud"}
+            ]
         nombre_archivo = f"valser-{tipo}-{timezone.localdate().isoformat()}.{formato}"
         if formato == "xlsx":
             return self.exportar_excel(nombre_archivo, titulos[tipo], columnas, datos)
@@ -324,7 +367,7 @@ class ExportarReporteView(APIView):
     def columnas_vacias(self, tipo):
         return {
             "inventario": ["codigo", "activo", "tipo", "categoria", "estado", "ubicacion", "serie", "valor"],
-            "prestamos": ["id", "nombre_receptor", "documento_receptor", "fecha_prestamo", "fecha_devolucion_prevista", "estado"],
+            "prestamos": ["numero_solicitud", "nombre_receptor", "documento_receptor", "fecha_prestamo", "fecha_devolucion_prevista", "estado"],
             "vencimientos": ["prestamo", "receptor", "documento", "fecha_prevista", "dias_vencido", "activos_pendientes"],
             "devoluciones": ["fecha_devolucion", "prestamo", "receptor", "documento", "codigo", "activo", "condicion", "observacion", "estado", "ubicacion"],
         }[tipo]

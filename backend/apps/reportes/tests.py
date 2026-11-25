@@ -78,6 +78,42 @@ class ReportesApiTests(APITestCase):
         self.assertEqual(response.data[0]["dias_vencido"], 3)
         self.assertEqual(response.data[0]["activos_pendientes"], "RPT-001")
 
+    def test_reporte_prestamos_usa_numero_visible_de_solicitud(self):
+        fecha_prevista = timezone.localdate() + timedelta(days=5)
+        solicitud_eliminada = SolicitudPrestamo.objects.create(
+            solicitante=self.admin,
+            nombre_receptor="Solicitud eliminada",
+            documento_receptor="111111",
+            fecha_devolucion_prevista=fecha_prevista,
+            motivo="Solicitud de prueba que se eliminará",
+        )
+        prestamo = Prestamo.objects.create(
+            nombre_receptor="Colaborador",
+            documento_receptor="998877",
+            fecha_devolucion_prevista=fecha_prevista,
+            creado_por=self.admin,
+        )
+        solicitud_actual = SolicitudPrestamo.objects.create(
+            solicitante=self.admin,
+            nombre_receptor=prestamo.nombre_receptor,
+            documento_receptor=prestamo.documento_receptor,
+            fecha_devolucion_prevista=fecha_prevista,
+            motivo="Solicitud actual",
+            estado=SolicitudPrestamo.Estado.APROBADA,
+            prestamo=prestamo,
+        )
+        solicitud_eliminada.delete()
+
+        response = self.client.get(reverse("reporte-prestamos"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreater(solicitud_actual.pk, 1)
+        fila = next(
+            fila for fila in response.data
+            if fila["id"] == prestamo.pk
+        )
+        self.assertEqual(fila["numero_solicitud"], 1)
+
     def test_reporte_prestamos_permite_descargar_pdfs_de_salida_y_devolucion(self):
         fecha_prevista = timezone.localdate() + timedelta(days=5)
         prestamo = Prestamo.objects.create(

@@ -1,5 +1,11 @@
 import React from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+    cleanup,
+    render,
+    screen,
+    waitFor,
+    within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -87,6 +93,7 @@ describe("Reportes", () => {
                 previous: null,
                 results: [{
                     id: 12,
+                    numero_solicitud: 1,
                     nombre_receptor: "Ana Pérez",
                     documento_receptor: "12345",
                     fecha_prestamo: "2026-11-20",
@@ -110,6 +117,11 @@ describe("Reportes", () => {
         await user.click(await screen.findByRole("button", { name: "Préstamos" }));
 
         expect(await screen.findByText("Ana Pérez")).toBeInTheDocument();
+        expect(screen.getByRole("columnheader", {
+            name: "Solicitud #",
+        })).toBeInTheDocument();
+        const filaPrestamo = screen.getByRole("row", { name: /Ana Pérez/ });
+        expect(within(filaPrestamo).getAllByRole("cell")[0]).toHaveTextContent("1");
         expect(screen.getByText("PC-001")).toBeInTheDocument();
         await user.click(screen.getByRole("button", {
             name: "Descargar listado de herramientas del préstamo 12",
