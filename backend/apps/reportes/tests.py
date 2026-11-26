@@ -1,7 +1,13 @@
 from datetime import timedelta
+import json
 from io import BytesIO
+from tempfile import TemporaryDirectory
+from zipfile import ZipFile
 
 from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from openpyxl import load_workbook
@@ -231,6 +237,40 @@ class ReportesApiTests(APITestCase):
         self.assertEqual(response_pdf.status_code, status.HTTP_200_OK)
         self.assertEqual(response_pdf["Content-Type"], "application/pdf")
         self.assertTrue(response_pdf.content.startswith(b"%PDF-"))
+
+    def test_descarga_respaldo_con_datos_y_archivos_cargados(self):
+        with TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                default_storage.save(
+                    "activos/foto-prueba.png",
+                    ContentFile(b"contenido de prueba"),
+                )
+
+                response = self.client.get(reverse("reporte-respaldo"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/zip")
+        contenido = b"".join(response.streaming_content)
+        with ZipFile(BytesIO(contenido)) as archivo_zip:
+            datos = json.loads(archivo_zip.read("base_datos.json"))
+            self.assertIn("LEEME.txt", archivo_zip.namelist())
+            self.assertIn("inventario.activo", [dato["model"] for dato in datos])
+            self.assertEqual(
+                archivo_zip.read("media/activos/foto-prueba.png"),
+                b"contenido de prueba",
+            )
+
+    def test_respaldo_solo_disponible_para_administradores(self):
+        usuario = get_user_model().objects.create_user(
+            username="usuario-sin-respaldo",
+            password="UserPassword123!",
+            rol=self.rol_consulta,
+        )
+        self.client.force_authenticate(user=usuario)
+
+        response = self.client.get(reverse("reporte-respaldo"))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_requiere_permiso_de_reportes(self):
         self.rol_consulta.puede_ver_reportes = False

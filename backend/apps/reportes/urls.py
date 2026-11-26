@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    DescargarRespaldoView,
     DescargarFormatoRetornoPrestamoView,
     DescargarListadoHerramientasPrestamoView,
     DevolucionesReporteView,
@@ -12,6 +13,7 @@ from .views import (
 
 
 urlpatterns = [
+    path("respaldo/", DescargarRespaldoView.as_view(), name="reporte-respaldo"),
     path("inventario/", InventarioReporteView.as_view(), name="reporte-inventario"),
     path("prestamos/", PrestamosReporteView.as_view(), name="reporte-prestamos"),
     path(

@@ -1,8 +1,13 @@
-from io import BytesIO
+from io import BytesIO, TextIOWrapper
+from shutil import copyfileobj
+from tempfile import SpooledTemporaryFile
+from zipfile import ZIP_DEFLATED, ZipFile
 from xml.sax.saxutils import escape
 
+from django.core.files.storage import default_storage
+from django.core.management import call_command
 from django.db.models import Count, Q
-from django.http import Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -23,6 +28,7 @@ from apps.movimientos.models import DetallePrestamo, Prestamo, SolicitudPrestamo
 from apps.movimientos.serializers import PrestamoSerializer
 from apps.usuarios.permissions import (
     PuedeConsultarReportes,
+    SoloAdministrador,
     es_administrador,
     puede_consultar,
 )
@@ -75,6 +81,68 @@ def _fecha_parametro(request, nombre):
     if not fecha:
         raise serializers.ValidationError({nombre: "Usa el formato AAAA-MM-DD."})
     return fecha
+
+
+def _agregar_archivos_del_storage(archivo_zip, carpeta=""):
+    if not default_storage.exists(carpeta):
+        return
+    carpetas, archivos = default_storage.listdir(carpeta)
+    for nombre in archivos:
+        ruta = f"{carpeta}/{nombre}" if carpeta else nombre
+        with default_storage.open(ruta, "rb") as origen:
+            with archivo_zip.open(f"media/{ruta}", "w") as destino:
+                copyfileobj(origen, destino)
+
+    for nombre in carpetas:
+        ruta = f"{carpeta}/{nombre}" if carpeta else nombre
+        _agregar_archivos_del_storage(archivo_zip, ruta)
+
+
+class DescargarRespaldoView(APIView):
+    permission_classes = [SoloAdministrador]
+
+    def get(self, request):
+        fecha = timezone.localdate().isoformat()
+        respaldo = SpooledTemporaryFile(max_size=10 * 1024 * 1024, mode="w+b")
+
+        with ZipFile(respaldo, "w", compression=ZIP_DEFLATED) as archivo_zip:
+            archivo_zip.writestr(
+                "LEEME.txt",
+                "Respaldo de Valser Activos\n\n"
+                "Incluye los datos de la base de datos en base_datos.json y "
+                "los archivos cargados en la carpeta media/.\n"
+                "Para restaurar: aplique primero las migraciones, cargue "
+                "base_datos.json con `python manage.py loaddata base_datos.json` "
+                "en una base vacía y copie el contenido de media/ a MEDIA_ROOT.\n"
+                "Este archivo contiene datos personales. Guárdelo en un lugar "
+                "seguro y de acceso restringido.\n",
+            )
+            with archivo_zip.open("base_datos.json", "w") as archivo_json:
+                salida_texto = TextIOWrapper(archivo_json, encoding="utf-8")
+                try:
+                    call_command(
+                        "dumpdata",
+                        "--natural-foreign",
+                        "--natural-primary",
+                        "--exclude=contenttypes",
+                        "--exclude=auth.permission",
+                        "--exclude=admin.logentry",
+                        "--exclude=sessions",
+                        "--exclude=token_blacklist",
+                        stdout=salida_texto,
+                    )
+                    salida_texto.flush()
+                finally:
+                    salida_texto.detach()
+            _agregar_archivos_del_storage(archivo_zip)
+
+        respaldo.seek(0)
+        return FileResponse(
+            respaldo,
+            as_attachment=True,
+            filename=f"respaldo-valser-{fecha}.zip",
+            content_type="application/zip",
+        )
 
 
 def _filtrar_activos(request):

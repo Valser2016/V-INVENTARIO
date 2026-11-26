@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Configuracion from "./Configuracion";
 import api from "../services/api";
+import { SessionContext } from "../context/SessionContext";
 
 vi.mock("../services/api", () => ({
     default: {
@@ -16,10 +17,12 @@ vi.mock("../services/api", () => ({
 }));
 
 const mockApi = vi.mocked(api);
-const renderConfiguracion = () => render(
-    <MemoryRouter>
-        <Configuracion />
-    </MemoryRouter>
+const renderConfiguracion = (perfil = null) => render(
+    <SessionContext.Provider value={{ perfil, cargando: false, error: "" }}>
+        <MemoryRouter>
+            <Configuracion />
+        </MemoryRouter>
+    </SessionContext.Provider>
 );
 
 beforeEach(() => {
@@ -29,6 +32,8 @@ beforeEach(() => {
 
 afterEach(() => {
     cleanup();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
 });
 
 describe("Configuración de catálogos", () => {
@@ -97,5 +102,30 @@ describe("Configuración de catálogos", () => {
         await waitFor(() => {
             expect(mockApi.get).toHaveBeenCalledWith("/levantamiento/configuracion/tipos/");
         });
+    });
+
+    it("permite a un administrador descargar un respaldo", async () => {
+        const user = userEvent.setup();
+        mockApi.get.mockImplementation((url) =>
+            Promise.resolve({
+                data: url === "/reportes/respaldo/" ? new Blob() : [],
+            })
+        );
+        vi.stubGlobal("URL", {
+            createObjectURL: vi.fn(() => "blob:respaldo"),
+            revokeObjectURL: vi.fn(),
+        });
+        const clickEnlace = vi.spyOn(HTMLAnchorElement.prototype, "click")
+            .mockImplementation(() => {});
+
+        renderConfiguracion({ es_administrador: true });
+
+        await user.click(await screen.findByRole("button", { name: "Descargar respaldo" }));
+
+        expect(mockApi.get).toHaveBeenCalledWith(
+            "/reportes/respaldo/",
+            { responseType: "blob" }
+        );
+        expect(clickEnlace).toHaveBeenCalledOnce();
     });
 });

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import api from "../services/api";
+import { useSession } from "../context/SessionContext";
 
 const catalogos = [
     {
@@ -68,6 +69,7 @@ const mensajeDeError = (error) => {
 };
 
 function Configuracion() {
+    const { perfil } = useSession();
     const [seccionKey, setSeccionKey] = useState("tipos");
     const [registros, setRegistros] = useState([]);
     const [tipos, setTipos] = useState([]);
@@ -75,10 +77,42 @@ function Configuracion() {
     const [registroEditado, setRegistroEditado] = useState(null);
     const [cargando, setCargando] = useState(true);
     const [guardando, setGuardando] = useState(false);
+    const [descargandoRespaldo, setDescargandoRespaldo] = useState(false);
     const [error, setError] = useState("");
     const [mensaje, setMensaje] = useState("");
 
     const seccion = catalogos.find((item) => item.key === seccionKey);
+
+    const descargarRespaldo = async () => {
+        setError("");
+        setMensaje("");
+        setDescargandoRespaldo(true);
+        try {
+            const respuesta = await api.get("/reportes/respaldo/", {
+                responseType: "blob",
+            });
+            const url = URL.createObjectURL(respuesta.data);
+            const enlace = document.createElement("a");
+            const nombreArchivo = respuesta.headers?.["content-disposition"]
+                ?.match(/filename="?([^";]+)"?/i)?.[1];
+            enlace.href = url;
+            enlace.download = nombreArchivo
+                || `respaldo-valser-${new Date().toISOString().slice(0, 10)}.zip`;
+            document.body.appendChild(enlace);
+            enlace.click();
+            enlace.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 0);
+        } catch (requestError) {
+            console.error("Error descargando respaldo:", requestError);
+            setError(
+                requestError.response?.status
+                    ? `No fue posible descargar el respaldo (error ${requestError.response.status}).`
+                    : "No fue posible conectar con el servidor para descargar el respaldo."
+            );
+        } finally {
+            setDescargandoRespaldo(false);
+        }
+    };
 
     useEffect(() => {
         let cancelado = false;
@@ -233,6 +267,26 @@ function Configuracion() {
                     </p>
                 </div>
             </header>
+
+            {perfil?.es_administrador && (
+                <section className="card backup-card" aria-labelledby="backup-heading">
+                    <div>
+                        <h2 id="backup-heading">Respaldo de información</h2>
+                        <p>
+                            Descarga una copia de los registros y archivos del sistema.
+                            El archivo contiene datos personales; guárdalo de forma segura.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={descargarRespaldo}
+                        disabled={descargandoRespaldo}
+                    >
+                        {descargandoRespaldo ? "Preparando respaldo..." : "Descargar respaldo"}
+                    </button>
+                </section>
+            )}
 
             <nav className="config-tabs" aria-label="Catálogos de configuración">
                 {catalogos.map((item) => (

@@ -189,3 +189,9 @@ dependencias y aplica las migraciones:
 python -m pip install -r requirements.txt
 python manage.py migrate
 ```
+
+En **Configuración**, los usuarios con rol **Administrador** pueden descargar
+un respaldo ZIP con los datos del sistema y los archivos cargados. El ZIP incluye
+instrucciones de restauración. Como contiene datos personales, guárdalo en un
+lugar seguro y de acceso restringido. La descarga es manual; conserva copias
+periódicas fuera de la aplicación.

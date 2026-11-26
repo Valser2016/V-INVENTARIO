@@ -1123,6 +1123,28 @@ a {
     margin-bottom: 18px;
 }
 
+.backup-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 18px 21px;
+}
+
+.backup-card h2 {
+    margin: 0;
+    color: #333;
+    font-family: "Manrope", sans-serif;
+    font-size: 14px;
+}
+
+.backup-card p {
+    margin: 6px 0 0;
+    color: #707070;
+    font-size: 12px;
+}
+
 .config-tab {
     display: inline-flex;
     min-height: 39px;
